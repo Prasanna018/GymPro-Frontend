@@ -55,7 +55,7 @@ const Settings = () => {
     <DashboardLayout requiredRole="owner">
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="font-display text-3xl md:text-4xl text-foreground">
               <span className="text-gradient-primary">SETTINGS</span>
@@ -64,13 +64,13 @@ const Settings = () => {
               Manage your gym settings and preferences.
             </p>
           </div>
-          <Button variant="hero" className="gap-2" onClick={handleSaveSettings}>
+          <Button variant="hero" className="gap-2 w-full sm:w-auto" onClick={handleSaveSettings}>
             <Save className="h-4 w-4" />
             Save Changes
           </Button>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
           {/* Gym Information */}
           <Card className="bg-gradient-card border-border/50">
             <CardHeader>

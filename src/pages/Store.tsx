@@ -197,7 +197,7 @@ const Store = () => {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-3 gap-3 md:gap-4">
           <div className="stat-card">
             <Package className="h-6 w-6 text-primary mb-2" />
             <h3 className="text-2xl font-bold text-foreground">{supplements.length}</h3>
@@ -227,7 +227,7 @@ const Store = () => {
         </div>
 
         {/* Products Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
           {filteredSupplements.map((supplement) => (
             <SupplementCard
               key={supplement.id}

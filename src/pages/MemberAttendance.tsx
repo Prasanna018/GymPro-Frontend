@@ -101,7 +101,7 @@ const MemberAttendance = () => {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
           <div className="stat-card">
             <div className="flex items-center gap-3">
               <div className="p-3 rounded-xl bg-primary/20">
@@ -150,16 +150,16 @@ const MemberAttendance = () => {
 
         {/* Calendar */}
         <Card className="bg-gradient-card border-border/50">
-          <CardHeader className="flex flex-row items-center justify-between">
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3">
             <div>
-              <CardTitle className="text-foreground">Attendance Calendar</CardTitle>
-              <CardDescription>Your gym visits for {monthName}</CardDescription>
+              <CardTitle className="text-foreground text-base md:text-lg">Attendance Calendar</CardTitle>
+              <CardDescription className="text-xs">Your gym visits for {monthName}</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="icon" onClick={() => changeMonth(-1)}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <span className="text-foreground font-medium min-w-[140px] text-center">
+              <span className="text-foreground font-medium text-sm min-w-[120px] text-center">
                 {monthName}
               </span>
               <Button variant="ghost" size="icon" onClick={() => changeMonth(1)}>
@@ -168,19 +168,19 @@ const MemberAttendance = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-7 gap-2 mb-4">
-              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
-                <div key={day} className="text-center text-sm text-muted-foreground font-medium py-2">
+            <div className="grid grid-cols-7 gap-1 mb-3">
+              {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(day => (
+                <div key={day} className="text-center text-xs text-muted-foreground font-medium py-1">
                   {day}
                 </div>
               ))}
             </div>
-            <div className="grid grid-cols-7 gap-2">
+            <div className="grid grid-cols-7 gap-1">
               {calendarDays.map((day, index) => (
                 <div
                   key={index}
                   className={`
-                    aspect-square rounded-lg flex items-center justify-center text-sm
+                    aspect-square rounded-lg flex items-center justify-center text-xs md:text-sm
                     ${day === null 
                       ? '' 
                       : day.attended 
@@ -190,11 +190,18 @@ const MemberAttendance = () => {
                   `}
                 >
                   {day?.day}
-                  {day?.attended && (
-                    <CheckCircle className="h-3 w-3 ml-1" />
-                  )}
                 </div>
               ))}
+            </div>
+            <div className="flex items-center gap-4 mt-4 text-xs text-muted-foreground">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded bg-accent/20 border border-accent/30" />
+                <span>Attended</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded bg-muted/30" />
+                <span>Not visited</span>
+              </div>
             </div>
           </CardContent>
         </Card>

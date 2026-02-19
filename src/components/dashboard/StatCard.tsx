@@ -23,21 +23,21 @@ export const StatCard = ({ title, value, icon: Icon, trend, variant = 'default' 
   return (
     <div className="stat-card">
       <div className="flex items-start justify-between">
-        <div className={cn('p-3 rounded-lg', iconColors[variant])}>
-          <Icon className="h-6 w-6" />
+        <div className={cn('p-2 md:p-3 rounded-lg', iconColors[variant])}>
+          <Icon className="h-5 w-5 md:h-6 md:w-6" />
         </div>
         {trend && (
           <span className={cn(
-            'text-sm font-medium',
+            'text-xs md:text-sm font-medium',
             trend.isPositive ? 'text-accent' : 'text-destructive'
           )}>
             {trend.isPositive ? '+' : ''}{trend.value}%
           </span>
         )}
       </div>
-      <div className="mt-4">
-        <h3 className="text-3xl font-bold text-foreground">{value}</h3>
-        <p className="text-sm text-muted-foreground mt-1">{title}</p>
+      <div className="mt-3 md:mt-4">
+        <h3 className="text-xl md:text-3xl font-bold text-foreground break-all">{value}</h3>
+        <p className="text-xs md:text-sm text-muted-foreground mt-1">{title}</p>
       </div>
     </div>
   );

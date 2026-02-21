@@ -27,6 +27,7 @@ const ownerLinks = [
   { href: '/dashboard/store', label: 'Store', icon: ShoppingBag },
   { href: '/dashboard/reminders', label: 'Reminders', icon: Bell },
   { href: '/dashboard/reports', label: 'Reports', icon: BarChart3 },
+  { href: '/dashboard/plans', label: 'Membership Plans', icon: Dumbbell },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 

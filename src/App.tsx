@@ -13,6 +13,7 @@ import Payments from "./pages/Payments";
 import Reminders from "./pages/Reminders";
 import Attendance from "./pages/Attendance";
 import Reports from "./pages/Reports";
+import Plans from "./pages/Plans";
 import Settings from "./pages/Settings";
 import MemberDashboard from "./pages/MemberDashboard";
 import MemberStore from "./pages/MemberStore";
@@ -46,6 +47,7 @@ const App = () => (
             <Route path="/dashboard/reminders" element={<Reminders />} />
             <Route path="/dashboard/attendance" element={<Attendance />} />
             <Route path="/dashboard/reports" element={<Reports />} />
+            <Route path="/dashboard/plans" element={<Plans />} />
             <Route path="/dashboard/settings" element={<Settings />} />
 
             {/* Member Routes */}

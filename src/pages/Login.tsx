@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Navbar } from '@/components/layout/Navbar';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,7 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  
+
   const { login } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -25,13 +25,13 @@ const Login = () => {
     setIsLoading(true);
 
     const success = await login(email, password);
-    
+
     if (success) {
       toast({
         title: 'Login Successful',
         description: 'Welcome back to GymPro!',
       });
-      
+
       // Navigate based on role
       if (email === 'owner@gympro.com') {
         navigate('/dashboard');
@@ -41,14 +41,14 @@ const Login = () => {
     } else {
       setError('Invalid email or password');
     }
-    
+
     setIsLoading(false);
   };
 
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
+
       <div className="min-h-screen flex items-center justify-center px-4 pt-16">
         <div className="w-full max-w-md">
           {/* Logo */}
@@ -122,6 +122,15 @@ const Login = () => {
                 {isLoading ? 'Signing in...' : 'Sign In'}
               </Button>
             </form>
+
+            <div className="mt-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                Don't have an owner account?{' '}
+                <Link to="/register" className="text-primary hover:underline font-medium">
+                  Register here
+                </Link>
+              </p>
+            </div>
 
             {/* Demo Credentials */}
             <div className="mt-8 pt-6 border-t border-border/50">

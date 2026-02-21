@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { MemberTable } from '@/components/dashboard/MemberTable';
-import { mockMembers, membershipPlans } from '@/lib/mockData';
-import { Member } from '@/lib/types';
+import { Member, MembershipPlan } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,69 +21,91 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
 
 const Members = () => {
-  const [members, setMembers] = useState<Member[]>(mockMembers);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [plans, setPlans] = useState<MembershipPlan[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
   // Form state
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    password: '',
     phone: '',
     address: '',
     planId: '',
   });
+
+  const fetchData = async () => {
+    setIsLoading(true);
+    try {
+      const [membersData, plansData] = await Promise.all([
+        api.get('/members'),
+        api.get('/plans')
+      ]);
+      setMembers(membersData);
+      setPlans(plansData);
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to load members', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const filteredMembers = members.filter(member =>
     member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     member.email.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (editingMember) {
-      // Update existing member
-      setMembers(members.map(m => 
-        m.id === editingMember.id 
-          ? { ...m, ...formData }
-          : m
-      ));
-      toast({
-        title: 'Member Updated',
-        description: `${formData.name} has been updated successfully.`,
-      });
-    } else {
-      // Add new member
-      const plan = membershipPlans.find(p => p.id === formData.planId);
-      const joiningDate = new Date().toISOString().split('T')[0];
-      const expiryDate = new Date(
-        new Date().setMonth(new Date().getMonth() + (plan?.duration || 1))
-      ).toISOString().split('T')[0];
 
-      const newMember: Member = {
-        id: String(Date.now()),
-        ...formData,
-        joiningDate,
-        expiryDate,
-        status: 'active',
-        dueAmount: plan?.price || 0,
-        paidAmount: 0,
-      };
-      
-      setMembers([newMember, ...members]);
-      toast({
-        title: 'Member Added',
-        description: `${formData.name} has been added successfully.`,
-      });
+    try {
+      if (editingMember) {
+        // Update existing member
+        await api.put(`/members/${editingMember.id}`, {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          address: formData.address,
+          plan_id: formData.planId
+        });
+        toast({
+          title: 'Member Updated',
+          description: `${formData.name} has been updated successfully.`,
+        });
+      } else {
+        // Add new member
+        await api.post('/members', {
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+          phone: formData.phone,
+          address: formData.address,
+          plan_id: formData.planId
+        });
+        toast({
+          title: 'Member Added',
+          description: `${formData.name} has been added successfully.`,
+        });
+      }
+
+      resetForm();
+      setIsDialogOpen(false);
+      fetchData(); // Refresh list
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to save member', variant: 'destructive' });
     }
-
-    resetForm();
-    setIsDialogOpen(false);
   };
 
   const handleEdit = (member: Member) => {
@@ -92,6 +113,7 @@ const Members = () => {
     setFormData({
       name: member.name,
       email: member.email,
+      password: '',
       phone: member.phone,
       address: member.address,
       planId: member.planId,
@@ -99,17 +121,23 @@ const Members = () => {
     setIsDialogOpen(true);
   };
 
-  const handleDelete = (member: Member) => {
-    setMembers(members.filter(m => m.id !== member.id));
-    toast({
-      title: 'Member Deleted',
-      description: `${member.name} has been removed.`,
-      variant: 'destructive',
-    });
+  const handleDelete = async (member: Member) => {
+    if (confirm(`Are you sure you want to delete ${member.name}?`)) {
+      try {
+        await api.delete(`/members/${member.id}`);
+        setMembers(members.filter(m => m.id !== member.id));
+        toast({
+          title: 'Member Deleted',
+          description: `${member.name} has been removed.`,
+        });
+      } catch (error) {
+        toast({ title: 'Error', description: 'Failed to delete member', variant: 'destructive' });
+      }
+    }
   };
 
   const resetForm = () => {
-    setFormData({ name: '', email: '', phone: '', address: '', planId: '' });
+    setFormData({ name: '', email: '', password: '', phone: '', address: '', planId: '' });
     setEditingMember(null);
   };
 
@@ -126,7 +154,7 @@ const Members = () => {
               Add, edit, and manage your gym members.
             </p>
           </div>
-          
+
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
             if (!open) resetForm();
@@ -143,7 +171,7 @@ const Members = () => {
                   {editingMember ? 'EDIT' : 'ADD'} <span className="text-gradient-primary">MEMBER</span>
                 </DialogTitle>
               </DialogHeader>
-              
+
               <form onSubmit={handleSubmit} className="space-y-4 mt-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Full Name</Label>
@@ -155,7 +183,7 @@ const Members = () => {
                     required
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>
                   <Input
@@ -167,7 +195,7 @@ const Members = () => {
                     required
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="phone">Phone</Label>
                   <Input
@@ -178,7 +206,7 @@ const Members = () => {
                     required
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="address">Address</Label>
                   <Input
@@ -189,7 +217,21 @@ const Members = () => {
                     required
                   />
                 </div>
-                
+
+                {!editingMember && (
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Login Password</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                      placeholder="Set login password for member"
+                      required
+                    />
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label>Membership Plan</Label>
                   <Select
@@ -200,7 +242,7 @@ const Members = () => {
                       <SelectValue placeholder="Select a plan" />
                     </SelectTrigger>
                     <SelectContent>
-                      {membershipPlans.map((plan) => (
+                      {plans.map((plan) => (
                         <SelectItem key={plan.id} value={plan.id}>
                           {plan.name} - ₹{plan.price.toLocaleString()}
                         </SelectItem>
@@ -242,14 +284,20 @@ const Members = () => {
         </div>
 
         {/* Members Table */}
-        <MemberTable
-          members={filteredMembers}
-          plans={membershipPlans}
-          onEdit={handleEdit}
-          onDelete={handleDelete}
-        />
+        {isLoading ? (
+          <div className="text-center py-12">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : (
+          <MemberTable
+            members={filteredMembers}
+            plans={plans}
+            onEdit={handleEdit}
+            onDelete={handleDelete}
+          />
+        )}
 
-        {filteredMembers.length === 0 && (
+        {!isLoading && filteredMembers.length === 0 && (
           <div className="text-center py-12">
             <p className="text-muted-foreground">No members found.</p>
           </div>

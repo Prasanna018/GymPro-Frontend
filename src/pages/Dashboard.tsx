@@ -1,12 +1,50 @@
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { MemberTable } from '@/components/dashboard/MemberTable';
-import { dashboardStats, mockMembers, membershipPlans } from '@/lib/mockData';
 import { Users, UserCheck, UserX, IndianRupee, AlertCircle, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
+import { api } from '@/lib/api';
+import { Member, DashboardStats, MembershipPlan } from '@/lib/types';
 
 const Dashboard = () => {
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [recentMembers, setRecentMembers] = useState<Member[]>([]);
+  const [plans, setPlans] = useState<MembershipPlan[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const [statsData, membersData, plansData] = await Promise.all([
+          api.get('/dashboard/stats'),
+          api.get('/members'),
+          api.get('/plans')
+        ]);
+        setStats(statsData);
+        // Take 5 most recent
+        setRecentMembers(membersData.slice(-5).reverse());
+        setPlans(plansData);
+      } catch (error) {
+        console.error('Failed to fetch dashboard data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchDashboardData();
+  }, []);
+
+  if (isLoading || !stats) {
+    return (
+      <DashboardLayout requiredRole="owner">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout requiredRole="owner">
       <div className="space-y-6 md:space-y-8">
@@ -30,12 +68,12 @@ const Dashboard = () => {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4">
-          <StatCard title="Total Members" value={dashboardStats.totalMembers} icon={Users} variant="primary" />
-          <StatCard title="Active Members" value={dashboardStats.activeMembers} icon={UserCheck} variant="accent" trend={{ value: 12, isPositive: true }} />
-          <StatCard title="Expired" value={dashboardStats.expiredMembers} icon={UserX} variant="warning" />
-          <StatCard title="Total Revenue" value={`₹${dashboardStats.totalRevenue.toLocaleString()}`} icon={IndianRupee} variant="primary" />
-          <StatCard title="Pending Dues" value={`₹${dashboardStats.pendingDues.toLocaleString()}`} icon={AlertCircle} variant="warning" />
-          <StatCard title="Monthly Revenue" value={`₹${dashboardStats.monthlyRevenue.toLocaleString()}`} icon={TrendingUp} variant="accent" trend={{ value: 8, isPositive: true }} />
+          <StatCard title="Total Members" value={stats.totalMembers} icon={Users} variant="primary" />
+          <StatCard title="Active Members" value={stats.activeMembers} icon={UserCheck} variant="accent" trend={{ value: 12, isPositive: true }} />
+          <StatCard title="Expired" value={stats.expiredMembers} icon={UserX} variant="warning" />
+          <StatCard title="Total Revenue" value={`₹${stats.totalRevenue.toLocaleString()}`} icon={IndianRupee} variant="primary" />
+          <StatCard title="Pending Dues" value={`₹${stats.pendingDues.toLocaleString()}`} icon={AlertCircle} variant="warning" />
+          <StatCard title="Monthly Revenue" value={`₹${stats.monthlyRevenue.toLocaleString()}`} icon={TrendingUp} variant="accent" trend={{ value: 8, isPositive: true }} />
         </div>
 
         {/* Quick Actions */}
@@ -73,8 +111,8 @@ const Dashboard = () => {
             </Link>
           </div>
           <MemberTable
-            members={mockMembers.slice(0, 5)}
-            plans={membershipPlans}
+            members={recentMembers}
+            plans={plans}
           />
         </div>
       </div>

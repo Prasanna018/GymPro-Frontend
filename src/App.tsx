@@ -21,6 +21,8 @@ import MemberPayments from "./pages/MemberPayments";
 import MemberProfile from "./pages/MemberProfile";
 import NotFound from "./pages/NotFound";
 
+import Register from "./pages/Register";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -34,7 +36,8 @@ const App = () => (
             {/* Public Routes */}
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />
-            
+            <Route path="/register" element={<Register />} />
+
             {/* Owner Routes */}
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/dashboard/members" element={<Members />} />
@@ -44,14 +47,14 @@ const App = () => (
             <Route path="/dashboard/attendance" element={<Attendance />} />
             <Route path="/dashboard/reports" element={<Reports />} />
             <Route path="/dashboard/settings" element={<Settings />} />
-            
+
             {/* Member Routes */}
             <Route path="/member" element={<MemberDashboard />} />
             <Route path="/member/store" element={<MemberStore />} />
             <Route path="/member/attendance" element={<MemberAttendance />} />
             <Route path="/member/payments" element={<MemberPayments />} />
             <Route path="/member/profile" element={<MemberProfile />} />
-            
+
             {/* Catch-all */}
             <Route path="*" element={<NotFound />} />
           </Routes>

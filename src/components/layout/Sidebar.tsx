@@ -1,4 +1,5 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
@@ -10,6 +11,7 @@ import {
   Settings,
   Dumbbell,
   BarChart3,
+  LogOut,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -37,7 +39,14 @@ const memberLinks = [
 
 export const SidebarContent = ({ userRole, onLinkClick }: SidebarProps) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout } = useAuth();
   const links = userRole === 'owner' ? ownerLinks : memberLinks;
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
+  };
 
   return (
     <div className="flex flex-col h-full p-4">
@@ -76,7 +85,14 @@ export const SidebarContent = ({ userRole, onLinkClick }: SidebarProps) => {
       </nav>
 
       <div className="mt-auto pt-4 border-t border-sidebar-border">
-        <div className="px-3 py-2 text-xs text-muted-foreground">
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-sidebar-foreground hover:bg-destructive/10 hover:text-destructive transition-all duration-200 mb-2"
+        >
+          <LogOut className="h-5 w-5 flex-shrink-0" />
+          Logout
+        </button>
+        <div className="px-3 py-2 text-xs text-muted-foreground text-center">
           © 2024 GymPro
         </div>
       </div>

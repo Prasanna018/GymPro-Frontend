@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { SupplementCard } from '@/components/store/SupplementCard';
-import { mockSupplements } from '@/lib/mockData';
+
 import { Supplement } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,9 +15,11 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
 
 const Store = () => {
-  const [supplements, setSupplements] = useState<Supplement[]>(mockSupplements);
+  const [supplements, setSupplements] = useState<Supplement[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSupplement, setEditingSupplement] = useState<Supplement | null>(null);
@@ -32,43 +34,57 @@ const Store = () => {
     category: '',
   });
 
+  useEffect(() => {
+    fetchSupplements();
+  }, []);
+
+  const fetchSupplements = async () => {
+    try {
+      const data = await api.get('/supplements');
+      setSupplements(data);
+    } catch (error) {
+      console.error('Failed to fetch supplements:', error);
+      toast({ title: 'Error', description: 'Failed to load supplements', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const filteredSupplements = supplements.filter(supplement =>
     supplement.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     supplement.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (editingSupplement) {
-      setSupplements(supplements.map(s => 
-        s.id === editingSupplement.id 
-          ? { ...s, ...formData, price: Number(formData.price), stock: Number(formData.stock) }
-          : s
-      ));
-      toast({
-        title: 'Supplement Updated',
-        description: `${formData.name} has been updated.`,
-      });
-    } else {
-      const newSupplement: Supplement = {
-        id: String(Date.now()),
-        name: formData.name,
-        description: formData.description,
-        price: Number(formData.price),
-        stock: Number(formData.stock),
-        category: formData.category,
-      };
-      
-      setSupplements([newSupplement, ...supplements]);
-      toast({
-        title: 'Supplement Added',
-        description: `${formData.name} has been added to the store.`,
-      });
-    }
 
-    resetForm();
-    setIsDialogOpen(false);
+    try {
+      if (editingSupplement) {
+        const payload = { ...formData, price: Number(formData.price), stock: Number(formData.stock) };
+        const updated = await api.put(`/supplements/${editingSupplement.id}`, payload);
+        setSupplements(supplements.map(s =>
+          s.id === editingSupplement.id ? updated : s
+        ));
+        toast({
+          title: 'Supplement Updated',
+          description: `${formData.name} has been updated.`,
+        });
+      } else {
+        const payload = { ...formData, price: Number(formData.price), stock: Number(formData.stock) };
+        const newSupplement = await api.post('/supplements', payload);
+
+        setSupplements([newSupplement, ...supplements]);
+        toast({
+          title: 'Supplement Added',
+          description: `${formData.name} has been added to the store.`,
+        });
+      }
+      resetForm();
+      setIsDialogOpen(false);
+    } catch (error) {
+      console.error('Failed to save supplement:', error);
+      toast({ title: 'Error', description: 'Failed to save supplement', variant: 'destructive' });
+    }
   };
 
   const handleEdit = (supplement: Supplement) => {
@@ -105,7 +121,7 @@ const Store = () => {
               Manage your supplement inventory and pricing.
             </p>
           </div>
-          
+
           <Dialog open={isDialogOpen} onOpenChange={(open) => {
             setIsDialogOpen(open);
             if (!open) resetForm();
@@ -122,7 +138,7 @@ const Store = () => {
                   {editingSupplement ? 'EDIT' : 'ADD'} <span className="text-gradient-primary">SUPPLEMENT</span>
                 </DialogTitle>
               </DialogHeader>
-              
+
               <form onSubmit={handleSubmit} className="space-y-4 mt-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Product Name</Label>
@@ -134,7 +150,7 @@ const Store = () => {
                     required
                   />
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="description">Description</Label>
                   <Input
@@ -145,7 +161,7 @@ const Store = () => {
                     required
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="price">Price (₹)</Label>
@@ -158,7 +174,7 @@ const Store = () => {
                       required
                     />
                   </div>
-                  
+
                   <div className="space-y-2">
                     <Label htmlFor="stock">Stock</Label>
                     <Input
@@ -171,7 +187,7 @@ const Store = () => {
                     />
                   </div>
                 </div>
-                
+
                 <div className="space-y-2">
                   <Label htmlFor="category">Category</Label>
                   <Input

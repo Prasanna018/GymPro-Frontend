@@ -1,13 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { mockMembers, membershipPlans } from '@/lib/mockData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { 
-  Search, 
-  Mail, 
+import {
+  Search,
+  Mail,
   MessageSquare,
   Send,
   AlertCircle,
@@ -15,22 +14,31 @@ import {
   Users
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
 
 const Reminders = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
+  const [membersNeedingReminder, setMembersNeedingReminder] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const membersNeedingReminder = mockMembers
-    .map(member => {
-      const plan = membershipPlans.find(p => p.id === member.planId);
-      const endDate = new Date(member.expiryDate);
-      const today = new Date();
-      const daysUntilExpiry = Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      const paymentStatus = member.dueAmount > 0 ? 'pending' : 'paid';
-      return { ...member, plan, daysUntilExpiry, paymentStatus };
-    })
-    .filter(member => member.daysUntilExpiry <= 7 || member.paymentStatus === 'pending');
+  useEffect(() => {
+    fetchReminders();
+  }, []);
+
+  const fetchReminders = async () => {
+    try {
+      setIsLoading(true);
+      const data = await api.get('/reminders/pending');
+      setMembersNeedingReminder(data);
+    } catch (error) {
+      console.error('Failed to fetch reminders:', error);
+      toast({ title: 'Error', description: 'Failed to load reminders', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const filteredMembers = membersNeedingReminder.filter(member =>
     member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -51,22 +59,32 @@ const Reminders = () => {
     }
   };
 
-  const sendEmailReminders = () => {
+  const sendEmailReminders = async () => {
     if (selectedMembers.length === 0) {
       toast({ title: 'No Members Selected', description: 'Please select at least one member.', variant: 'destructive' });
       return;
     }
-    toast({ title: 'Email Reminders Sent', description: `Sent reminders to ${selectedMembers.length} member(s).` });
-    setSelectedMembers([]);
+    try {
+      await api.post('/reminders/email', { member_ids: selectedMembers });
+      toast({ title: 'Email Reminders Sent', description: `Sent reminders to ${selectedMembers.length} member(s).` });
+      setSelectedMembers([]);
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to send email reminders', variant: 'destructive' });
+    }
   };
 
-  const sendWhatsAppReminders = () => {
+  const sendWhatsAppReminders = async () => {
     if (selectedMembers.length === 0) {
       toast({ title: 'No Members Selected', description: 'Please select at least one member.', variant: 'destructive' });
       return;
     }
-    toast({ title: 'WhatsApp Reminders Sent', description: `Sent WhatsApp reminders to ${selectedMembers.length} member(s).` });
-    setSelectedMembers([]);
+    try {
+      await api.post('/reminders/whatsapp', { member_ids: selectedMembers });
+      toast({ title: 'WhatsApp Reminders Sent', description: `Sent WhatsApp reminders to ${selectedMembers.length} member(s).` });
+      setSelectedMembers([]);
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to send whatsapp reminders', variant: 'destructive' });
+    }
   };
 
   const getStatusBadge = (daysUntilExpiry: number, paymentStatus: string) => {

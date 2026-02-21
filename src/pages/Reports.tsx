@@ -1,8 +1,9 @@
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { dashboardStats, mockMembers, membershipPlans, mockSupplements } from '@/lib/mockData';
-import { 
-  Users, 
-  IndianRupee, 
+import { api } from '@/lib/api';
+import {
+  Users,
+  IndianRupee,
   TrendingUp,
   Package,
   Calendar,
@@ -36,37 +37,41 @@ import { useToast } from '@/hooks/use-toast';
 
 const Reports = () => {
   const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(true);
+  const [stats, setStats] = useState<any>(null);
+  const [revenueData, setRevenueData] = useState<any[]>([]);
+  const [membershipData, setMembershipData] = useState<any[]>([]);
+  const [attendanceData, setAttendanceData] = useState<any[]>([]);
+  const [productSalesData, setProductSalesData] = useState<any[]>([]);
 
-  const revenueData = [
-    { month: 'Jan', revenue: 45000 },
-    { month: 'Feb', revenue: 52000 },
-    { month: 'Mar', revenue: 48000 },
-    { month: 'Apr', revenue: 61000 },
-    { month: 'May', revenue: 55000 },
-    { month: 'Jun', revenue: 67000 },
-  ];
+  useEffect(() => {
+    fetchReportsData();
+  }, []);
 
-  const membershipData = membershipPlans.map(plan => ({
-    name: plan.name,
-    value: mockMembers.filter(m => m.planId === plan.id).length,
-  }));
+  const fetchReportsData = async () => {
+    try {
+      setIsLoading(true);
+      const [statsRes, revenueRes, membershipRes, attendanceRes, productsRes] = await Promise.all([
+        api.get('/dashboard/stats'),
+        api.get('/reports/revenue'),
+        api.get('/reports/membership'),
+        api.get('/reports/attendance'),
+        api.get('/reports/products')
+      ]);
+      setStats(statsRes);
+      setRevenueData(revenueRes.reverse()); // Reverse to show oldest to newest
+      setMembershipData(membershipRes);
+      setAttendanceData(attendanceRes.reverse());
+      setProductSalesData(productsRes);
+    } catch (error) {
+      console.error('Failed to fetch reports data:', error);
+      toast({ title: 'Error', description: 'Failed to load report data', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const COLORS = ['hsl(var(--primary))', 'hsl(var(--accent))', 'hsl(var(--info))', 'hsl(var(--warning))'];
-
-  const attendanceData = [
-    { day: 'Mon', attendance: 45 },
-    { day: 'Tue', attendance: 52 },
-    { day: 'Wed', attendance: 48 },
-    { day: 'Thu', attendance: 55 },
-    { day: 'Fri', attendance: 60 },
-    { day: 'Sat', attendance: 75 },
-    { day: 'Sun', attendance: 40 },
-  ];
-
-  const productSalesData = mockSupplements.slice(0, 5).map(p => ({
-    name: p.name.split(' ')[0],
-    sales: Math.floor(Math.random() * 50) + 10,
-  }));
 
   const handleExportReport = (reportType: string) => {
     toast({ title: 'Report Exported', description: `${reportType} report has been downloaded.` });
@@ -89,52 +94,58 @@ const Reports = () => {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-          <div className="stat-card">
-            <div className="flex items-center gap-2 md:gap-3">
-              <div className="p-2 md:p-3 rounded-xl bg-primary/20 flex-shrink-0">
-                <Users className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+        {isLoading ? (
+          <div className="flex justify-center items-center h-32">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
+            <div className="stat-card">
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className="p-2 md:p-3 rounded-xl bg-primary/20 flex-shrink-0">
+                  <Users className="h-5 w-5 md:h-6 md:w-6 text-primary" />
+                </div>
+                <div>
+                  <p className="text-xs md:text-sm text-muted-foreground">Members</p>
+                  <p className="text-xl md:text-2xl font-bold text-foreground">{stats?.totalMembers || 0}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-xs md:text-sm text-muted-foreground">Members</p>
-                <p className="text-xl md:text-2xl font-bold text-foreground">{dashboardStats.totalMembers}</p>
+            </div>
+            <div className="stat-card">
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className="p-2 md:p-3 rounded-xl bg-accent/20 flex-shrink-0">
+                  <IndianRupee className="h-5 w-5 md:h-6 md:w-6 text-accent" />
+                </div>
+                <div>
+                  <p className="text-xs md:text-sm text-muted-foreground">Revenue</p>
+                  <p className="text-lg md:text-2xl font-bold text-foreground">₹{(stats?.totalRevenue || 0).toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className="p-2 md:p-3 rounded-xl bg-info/20 flex-shrink-0">
+                  <TrendingUp className="h-5 w-5 md:h-6 md:w-6 text-info" />
+                </div>
+                <div>
+                  <p className="text-xs md:text-sm text-muted-foreground">This Month</p>
+                  <p className="text-lg md:text-2xl font-bold text-foreground">₹{(stats?.monthlyRevenue || 0).toLocaleString()}</p>
+                </div>
+              </div>
+            </div>
+            <div className="stat-card">
+              <div className="flex items-center gap-2 md:gap-3">
+                <div className="p-2 md:p-3 rounded-xl bg-warning/20 flex-shrink-0">
+                  <Package className="h-5 w-5 md:h-6 md:w-6 text-warning" />
+                </div>
+                <div>
+                  <p className="text-xs md:text-sm text-muted-foreground">Products</p>
+                  <p className="text-xl md:text-2xl font-bold text-foreground">Top 5</p>
+                </div>
               </div>
             </div>
           </div>
-          <div className="stat-card">
-            <div className="flex items-center gap-2 md:gap-3">
-              <div className="p-2 md:p-3 rounded-xl bg-accent/20 flex-shrink-0">
-                <IndianRupee className="h-5 w-5 md:h-6 md:w-6 text-accent" />
-              </div>
-              <div>
-                <p className="text-xs md:text-sm text-muted-foreground">Revenue</p>
-                <p className="text-lg md:text-2xl font-bold text-foreground">₹{dashboardStats.totalRevenue.toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="flex items-center gap-2 md:gap-3">
-              <div className="p-2 md:p-3 rounded-xl bg-info/20 flex-shrink-0">
-                <TrendingUp className="h-5 w-5 md:h-6 md:w-6 text-info" />
-              </div>
-              <div>
-                <p className="text-xs md:text-sm text-muted-foreground">This Month</p>
-                <p className="text-lg md:text-2xl font-bold text-foreground">₹{dashboardStats.monthlyRevenue.toLocaleString()}</p>
-              </div>
-            </div>
-          </div>
-          <div className="stat-card">
-            <div className="flex items-center gap-2 md:gap-3">
-              <div className="p-2 md:p-3 rounded-xl bg-warning/20 flex-shrink-0">
-                <Package className="h-5 w-5 md:h-6 md:w-6 text-warning" />
-              </div>
-              <div>
-                <p className="text-xs md:text-sm text-muted-foreground">Sold</p>
-                <p className="text-xl md:text-2xl font-bold text-foreground">156</p>
-              </div>
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* Charts Grid */}
         <div className="grid lg:grid-cols-2 gap-4 md:gap-6">

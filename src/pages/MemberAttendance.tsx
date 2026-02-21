@@ -1,10 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { mockAttendance } from '@/lib/mockData';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { 
+import {
   Calendar,
   Clock,
   TrendingUp,
@@ -21,21 +20,35 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
 
 const MemberAttendance = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedMonth, setSelectedMonth] = useState(new Date());
+  const [memberAttendance, setMemberAttendance] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Get current month's attendance for this member
-  const memberAttendance = mockAttendance.filter(a => 
-    a.memberId === (user?.id || 'm1')
-  );
+  useEffect(() => {
+    fetchAttendance();
+  }, [selectedMonth]);
+
+  const fetchAttendance = async () => {
+    try {
+      setIsLoading(true);
+      const data = await api.get(`/attendance/me?month=${selectedMonth.getMonth() + 1}&year=${selectedMonth.getFullYear()}`);
+      setMemberAttendance(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const currentMonthAttendance = memberAttendance.filter(a => {
     const date = new Date(a.date);
     return date.getMonth() === selectedMonth.getMonth() &&
-           date.getFullYear() === selectedMonth.getFullYear();
+      date.getFullYear() === selectedMonth.getFullYear();
   });
 
   const totalDaysThisMonth = currentMonthAttendance.length;
@@ -47,11 +60,18 @@ const MemberAttendance = () => {
     setSelectedMonth(newDate);
   };
 
-  const handleCheckIn = () => {
-    toast({
-      title: 'Checked In!',
-      description: 'Your attendance has been recorded. Have a great workout!',
-    });
+  const handleCheckIn = async () => {
+    try {
+      await api.post('/attendance/checkin', { date: new Date().toISOString().split('T')[0] });
+      toast({
+        title: 'Checked In!',
+        description: 'Your attendance has been recorded. Have a great workout!',
+      });
+      fetchAttendance();
+    } catch (error) {
+      console.error('Failed to checkin', error);
+      toast({ title: 'Check In Failed', description: 'Could not mark attendance.', variant: 'destructive' });
+    }
   };
 
   const monthName = selectedMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -181,10 +201,10 @@ const MemberAttendance = () => {
                   key={index}
                   className={`
                     aspect-square rounded-lg flex items-center justify-center text-xs md:text-sm
-                    ${day === null 
-                      ? '' 
-                      : day.attended 
-                        ? 'bg-accent/20 text-accent border border-accent/30' 
+                    ${day === null
+                      ? ''
+                      : day.attended
+                        ? 'bg-accent/20 text-accent border border-accent/30'
                         : 'bg-muted/30 text-muted-foreground'
                     }
                   `}
@@ -222,20 +242,20 @@ const MemberAttendance = () => {
                     </div>
                     <div>
                       <p className="font-medium text-foreground">
-                        {new Date(record.date).toLocaleDateString('en-US', { 
-                          weekday: 'long', 
-                          month: 'short', 
-                          day: 'numeric' 
+                        {new Date(record.date).toLocaleDateString('en-US', {
+                          weekday: 'long',
+                          month: 'short',
+                          day: 'numeric'
                         })}
                       </p>
                       <p className="text-sm text-muted-foreground">
-                        {record.checkIn} - {record.checkOut || 'Active'}
+                        {record.check_in} - {record.check_out || 'Active'}
                       </p>
                     </div>
                   </div>
                   <Badge className="bg-accent/20 text-accent border-accent/30">
-                    {record.checkOut 
-                      ? 'Completed' 
+                    {record.check_out
+                      ? 'Completed'
                       : 'In Progress'
                     }
                   </Badge>

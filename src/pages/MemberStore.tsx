@@ -1,13 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { SupplementCard } from '@/components/store/SupplementCard';
-import { mockSupplements } from '@/lib/mockData';
 import { Supplement } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Search, ShoppingCart, X, Minus, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
 import {
   Sheet,
   SheetContent,
@@ -24,9 +24,26 @@ interface CartItem {
 const MemberStore = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [supplements, setSupplements] = useState<Supplement[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const filteredSupplements = mockSupplements.filter(supplement =>
+  useEffect(() => {
+    fetchSupplements();
+  }, []);
+
+  const fetchSupplements = async () => {
+    try {
+      const data = await api.get('/supplements');
+      setSupplements(data);
+    } catch (err) {
+      console.error('err fetching supplements', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const filteredSupplements = supplements.filter(supplement =>
     supplement.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     supplement.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -68,12 +85,23 @@ const MemberStore = () => {
   const cartTotal = cart.reduce((total, item) => total + item.supplement.price * item.quantity, 0);
   const cartItemCount = cart.reduce((count, item) => count + item.quantity, 0);
 
-  const handleCheckout = () => {
-    toast({
-      title: 'Order Placed!',
-      description: 'Please pay at the counter to complete your purchase.',
-    });
-    setCart([]);
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+    try {
+      const payload = {
+        items: cart.map(c => ({ supplement_id: c.supplement.id, quantity: c.quantity }))
+      };
+      await api.post('/orders', payload);
+      toast({
+        title: 'Order Placed!',
+        description: 'Please pay at the counter to complete your purchase.',
+      });
+      setCart([]);
+      fetchSupplements(); // Refresh stock
+    } catch (error) {
+      console.error('Checkout failed:', error);
+      toast({ title: 'Error', description: 'Checkout failed', variant: 'destructive' });
+    }
   };
 
   return (
@@ -89,7 +117,7 @@ const MemberStore = () => {
               Browse and purchase supplements.
             </p>
           </div>
-          
+
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="hero" className="gap-2 relative">
@@ -108,7 +136,7 @@ const MemberStore = () => {
                   YOUR <span className="text-gradient-primary">CART</span>
                 </SheetTitle>
               </SheetHeader>
-              
+
               <div className="mt-6 flex flex-col h-[calc(100vh-200px)]">
                 {cart.length > 0 ? (
                   <>
@@ -149,7 +177,7 @@ const MemberStore = () => {
                         </div>
                       ))}
                     </div>
-                    
+
                     <div className="border-t border-border/50 pt-4 mt-4 space-y-4">
                       <div className="flex justify-between items-center text-lg">
                         <span className="text-muted-foreground">Total</span>

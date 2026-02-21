@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { mockMembers, mockAttendance } from '@/lib/mockData';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Search, 
+import {
+  Search,
   Calendar,
   Clock,
   UserCheck,
@@ -15,25 +15,47 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
 
 const Attendance = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [members, setMembers] = useState<any[]>([]);
+  const [attendanceRecords, setAttendanceRecords] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
-  const activeMembersList = mockMembers.filter(m => m.status === 'active');
+  useEffect(() => {
+    fetchData();
+  }, [selectedDate]);
 
-  const todayAttendance = mockAttendance.filter(
-    a => a.date === selectedDate
-  );
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const [membersData, attendanceData] = await Promise.all([
+        api.get('/members'),
+        api.get(`/attendance?date=${selectedDate}`)
+      ]);
+      setMembers(membersData);
+      setAttendanceRecords(attendanceData);
+    } catch (error) {
+      console.error('Failed to fetch attendance data:', error);
+      toast({ title: 'Error', description: 'Failed to load attendance data', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const activeMembersList = members.filter(m => m.status === 'active');
 
   const membersWithAttendance = activeMembersList.map(member => {
-    const attendance = todayAttendance.find(a => a.memberId === member.id);
+    const attendance = attendanceRecords.find(a => a.member_id === member.id);
     return {
       ...member,
       checkedIn: !!attendance,
-      checkInTime: attendance?.checkIn,
-      checkOutTime: attendance?.checkOut,
+      attendanceId: attendance?.id,
+      checkInTime: attendance?.check_in,
+      checkOutTime: attendance?.check_out,
     };
   });
 
@@ -45,12 +67,29 @@ const Attendance = () => {
   const presentCount = membersWithAttendance.filter(m => m.checkedIn).length;
   const absentCount = activeMembersList.length - presentCount;
 
-  const handleCheckIn = (memberId: string, memberName: string) => {
-    toast({ title: 'Check-In Recorded', description: `${memberName} has been checked in.` });
+  const handleCheckIn = async (memberId: string, memberName: string) => {
+    try {
+      await api.post('/attendance/checkin', {
+        member_id: memberId,
+        date: selectedDate
+      });
+      toast({ title: 'Check-In Recorded', description: `${memberName} has been checked in.` });
+      fetchData(); // Refresh to get the ID and time
+    } catch (error) {
+      console.error('Checkin failed:', error);
+      toast({ title: 'Check-In Failed', description: 'An error occurred.', variant: 'destructive' });
+    }
   };
 
-  const handleCheckOut = (memberId: string, memberName: string) => {
-    toast({ title: 'Check-Out Recorded', description: `${memberName} has been checked out.` });
+  const handleCheckOut = async (attendanceId: string, memberName: string) => {
+    try {
+      await api.put(`/attendance/${attendanceId}/checkout`, {});
+      toast({ title: 'Check-Out Recorded', description: `${memberName} has been checked out.` });
+      fetchData(); // Refresh to update time
+    } catch (error) {
+      console.error('Checkout failed:', error);
+      toast({ title: 'Check-Out Failed', description: 'An error occurred.', variant: 'destructive' });
+    }
   };
 
   const changeDate = (days: number) => {

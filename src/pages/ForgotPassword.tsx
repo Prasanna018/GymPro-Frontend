@@ -23,7 +23,7 @@ const ForgotPassword = () => {
             setIsSuccess(true);
             toast({
                 title: 'Reset Link Sent',
-                description: 'If your email is registered, you will see a reset token in the backend console.',
+                description: `We've sent a password reset link to ${email}. Please check your inbox.`,
             });
         } catch (error: any) {
             toast({

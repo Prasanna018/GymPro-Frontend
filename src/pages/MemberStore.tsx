@@ -45,23 +45,35 @@ const MemberStore = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
   const [supplements, setSupplements] = useState<Supplement[]>([]);
+  const [gymSettings, setGymSettings] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchSupplements();
+    const initStore = async () => {
+      setIsLoading(true);
+      await Promise.all([fetchSupplements(), fetchSettings()]);
+      setIsLoading(false);
+    };
+    initStore();
   }, []);
 
   const fetchSupplements = async () => {
     try {
-      setIsLoading(true);
       const data = await api.get('/supplements');
       setSupplements(data);
     } catch (err) {
       console.error('Error fetching supplements:', err);
-    } finally {
-      setIsLoading(false);
+    }
+  };
+
+  const fetchSettings = async () => {
+    try {
+      const data = await api.get('/settings');
+      setGymSettings(data);
+    } catch (err) {
+      console.error('Error fetching settings:', err);
     }
   };
 
@@ -140,11 +152,11 @@ const MemberStore = () => {
         {/* Header */}
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <h1 className="font-display text-3xl md:text-4xl text-foreground">
-              PROTEIN <span className="text-gradient-primary">& SUPPLEMENTS</span>
+            <h1 className="font-display text-3xl md:text-4xl text-foreground uppercase">
+              {gymSettings?.gymName || 'GYM'} <span className="text-gradient-primary">STORE</span>
             </h1>
             <p className="text-muted-foreground mt-1">
-              Premium vitamins & supplements at exclusive member prices.
+              Premium vitamins & supplements from your gym's official catalog.
             </p>
           </div>
 

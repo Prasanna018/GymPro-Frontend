@@ -26,9 +26,10 @@ const ForgotPassword = () => {
                 description: `We've sent a password reset link to ${email}. Please check your inbox.`,
             });
         } catch (error: any) {
+            const errorMsg = error.response?.data?.detail || error.message || 'Failed to send reset link';
             toast({
-                title: 'Error',
-                description: error.message || 'Failed to send reset link',
+                title: 'Request Failed',
+                description: errorMsg,
                 variant: 'destructive',
             });
         } finally {

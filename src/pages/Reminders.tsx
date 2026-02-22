@@ -7,7 +7,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import {
   Search,
   Mail,
-  MessageSquare,
   Send,
   AlertCircle,
   Clock,
@@ -21,6 +20,7 @@ const Reminders = () => {
   const [selectedMembers, setSelectedMembers] = useState<string[]>([]);
   const [membersNeedingReminder, setMembersNeedingReminder] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSending, setIsSending] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -59,31 +59,25 @@ const Reminders = () => {
     }
   };
 
-  const sendEmailReminders = async () => {
-    if (selectedMembers.length === 0) {
+  const sendEmailReminders = async (memberIds?: string[]) => {
+    const ids = memberIds || selectedMembers;
+    if (ids.length === 0) {
       toast({ title: 'No Members Selected', description: 'Please select at least one member.', variant: 'destructive' });
       return;
     }
-    try {
-      await api.post('/reminders/email', { member_ids: selectedMembers });
-      toast({ title: 'Email Reminders Sent', description: `Sent reminders to ${selectedMembers.length} member(s).` });
-      setSelectedMembers([]);
-    } catch (error) {
-      toast({ title: 'Error', description: 'Failed to send email reminders', variant: 'destructive' });
-    }
-  };
 
-  const sendWhatsAppReminders = async () => {
-    if (selectedMembers.length === 0) {
-      toast({ title: 'No Members Selected', description: 'Please select at least one member.', variant: 'destructive' });
-      return;
-    }
     try {
-      await api.post('/reminders/whatsapp', { member_ids: selectedMembers });
-      toast({ title: 'WhatsApp Reminders Sent', description: `Sent WhatsApp reminders to ${selectedMembers.length} member(s).` });
-      setSelectedMembers([]);
+      setIsSending(true);
+      await api.post('/reminders/email', { member_ids: ids });
+      toast({
+        title: 'Reminders Sent Successfully',
+        description: `Successfully sent email reminders to ${ids.length} member(s).`
+      });
+      if (!memberIds) setSelectedMembers([]);
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to send whatsapp reminders', variant: 'destructive' });
+      toast({ title: 'Delivery Failed', description: 'Failed to send one or more email reminders. Please check your SMTP settings.', variant: 'destructive' });
+    } finally {
+      setIsSending(false);
     }
   };
 
@@ -98,19 +92,22 @@ const Reminders = () => {
     <DashboardLayout requiredRole="owner">
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="font-display text-3xl md:text-4xl text-foreground">
               SEND <span className="text-gradient-primary">REMINDERS</span>
             </h1>
-            <p className="text-muted-foreground mt-1">Send email and WhatsApp reminders to members.</p>
+            <p className="text-muted-foreground mt-1">Send professional email reminders for renewals and pending dues.</p>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button variant="outline" className="gap-2 flex-1 sm:flex-none" onClick={sendEmailReminders} disabled={selectedMembers.length === 0}>
-              <Mail className="h-4 w-4" />Send Email ({selectedMembers.length})
-            </Button>
-            <Button variant="hero" className="gap-2 flex-1 sm:flex-none" onClick={sendWhatsAppReminders} disabled={selectedMembers.length === 0}>
-              <MessageSquare className="h-4 w-4" />Send WhatsApp ({selectedMembers.length})
+          <div className="flex gap-3">
+            <Button
+              variant="hero"
+              className="gap-2 w-full sm:w-auto"
+              onClick={() => sendEmailReminders()}
+              disabled={selectedMembers.length === 0 || isSending}
+            >
+              <Mail className="h-4 w-4" />
+              {isSending ? 'Sending...' : `Send Bulk Email (${selectedMembers.length})`}
             </Button>
           </div>
         </div>
@@ -156,7 +153,7 @@ const Reminders = () => {
         <div className="relative max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           <Input
-            placeholder="Search members..."
+            placeholder="Search members by name or email..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10"
@@ -176,8 +173,7 @@ const Reminders = () => {
                     />
                   </th>
                   <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">Member</th>
-                  <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">Contact</th>
-                  <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">Plan</th>
+                  <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">Contact Details</th>
                   <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">Status</th>
                   <th className="text-right py-4 px-6 text-sm font-medium text-muted-foreground">Action</th>
                 </tr>
@@ -193,24 +189,27 @@ const Reminders = () => {
                         <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
                           <span className="text-primary font-medium">{member.name.charAt(0)}</span>
                         </div>
-                        <p className="font-medium text-foreground">{member.name}</p>
+                        <div>
+                          <p className="font-medium text-foreground">{member.name}</p>
+                          <p className="text-xs text-muted-foreground">Plan: {member.plan || "No Plan Assigned"}</p>
+                        </div>
                       </div>
                     </td>
                     <td className="py-4 px-6">
                       <p className="text-sm text-foreground">{member.email}</p>
                       <p className="text-sm text-muted-foreground">{member.phone}</p>
                     </td>
-                    <td className="py-4 px-6 text-foreground">{member.plan?.name}</td>
                     <td className="py-4 px-6">{getStatusBadge(member.daysUntilExpiry, member.paymentStatus)}</td>
                     <td className="py-4 px-6 text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast({ title: 'Email Sent', description: `Reminder sent to ${member.name}.` })}>
-                          <Mail className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => toast({ title: 'WhatsApp Sent', description: `Reminder sent to ${member.name}.` })}>
-                          <MessageSquare className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-2 text-primary hover:text-primary hover:bg-primary/10"
+                        onClick={() => sendEmailReminders([member.id])}
+                      >
+                        <Mail className="h-4 w-4" />
+                        Send Reminder
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -223,7 +222,7 @@ const Reminders = () => {
         <div className="md:hidden space-y-3">
           {filteredMembers.map((member) => (
             <div key={member.id} className="bg-gradient-card rounded-xl border border-border/50 p-4">
-              <div className="flex items-start gap-3 mb-3">
+              <div className="flex items-start gap-3 mb-4">
                 <Checkbox
                   checked={selectedMembers.includes(member.id)}
                   onCheckedChange={() => toggleMember(member.id)}
@@ -231,32 +230,40 @@ const Reminders = () => {
                 />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <p className="font-medium text-foreground">{member.name}</p>
-                      <p className="text-xs text-muted-foreground">{member.email}</p>
+                    <div className="min-w-0">
+                      <p className="font-medium text-foreground truncate">{member.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{member.email}</p>
                       <p className="text-xs text-muted-foreground">{member.phone}</p>
                     </div>
                     {getStatusBadge(member.daysUntilExpiry, member.paymentStatus)}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">Plan: {member.plan?.name}</p>
+                  <p className="text-xs text-muted-foreground mt-1">Plan: {member.plan || "None"}</p>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" className="flex-1 gap-2" onClick={() => toast({ title: 'Email Sent', description: `Reminder sent to ${member.name}.` })}>
-                  <Mail className="h-3.5 w-3.5" />Email
-                </Button>
-                <Button variant="hero" size="sm" className="flex-1 gap-2" onClick={() => toast({ title: 'WhatsApp Sent', description: `Reminder sent to ${member.name}.` })}>
-                  <MessageSquare className="h-3.5 w-3.5" />WhatsApp
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-2 text-primary border-primary/20 hover:bg-primary/10"
+                onClick={() => sendEmailReminders([member.id])}
+              >
+                <Mail className="h-4 w-4" />
+                Send Email Reminder
+              </Button>
             </div>
           ))}
         </div>
 
-        {filteredMembers.length === 0 && (
+        {filteredMembers.length === 0 && !isLoading && (
           <div className="text-center py-12">
             <Send className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <p className="text-muted-foreground">No members need reminders at this time.</p>
+          </div>
+        )}
+
+        {isLoading && (
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading members...</p>
           </div>
         )}
       </div>

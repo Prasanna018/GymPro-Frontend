@@ -70,14 +70,14 @@ const ForgotPassword = () => {
                                 <div className="inline-flex items-center justify-center p-3 rounded-full bg-success/20 mb-4">
                                     <CheckCircle2 className="h-8 w-8 text-success" />
                                 </div>
-                                <h2 className="text-xl font-semibold mb-2">Check Backend Console</h2>
+                                <h2 className="text-xl font-semibold mb-2">Check Your Email</h2>
                                 <p className="text-muted-foreground mb-6 text-sm">
-                                    We've sent a 32-character reset token. In this demo, please check the
-                                    backend terminal to find it.
+                                    We've sent a password reset link and token to <strong>{email}</strong>.
+                                    Please check your inbox (and spam folder) to proceed.
                                 </p>
                                 <Link to="/reset-password">
                                     <Button variant="hero" className="w-full">
-                                        Proceed to Reset Password
+                                        Enter Reset Token
                                     </Button>
                                 </Link>
                             </div>

@@ -32,7 +32,8 @@ const ownerLinks = [
 ];
 
 const memberLinks = [
-  { href: '/member', label: 'My Profile', icon: Users },
+  { href: '/member', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/member/profile', label: 'My Profile', icon: Users },
   { href: '/member/payments', label: 'Payments', icon: CreditCard },
   { href: '/member/attendance', label: 'Attendance', icon: Calendar },
   { href: '/member/store', label: 'Store', icon: ShoppingBag },

@@ -1,10 +1,10 @@
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { mockMembers, membershipPlans } from '@/lib/mockData';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  IndianRupee, 
+import {
+  IndianRupee,
   Calendar,
   CheckCircle,
   AlertCircle,
@@ -20,43 +20,40 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
+import { Member, MembershipPlan, Payment } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 const MemberPayments = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [member, setMember] = useState<Member | null>(null);
+  const [plan, setPlan] = useState<MembershipPlan | null>(null);
+  const [paymentHistory, setPaymentHistory] = useState<Payment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Get current member's data
-  const memberData = mockMembers.find(m => m.id === (user?.id || '1')) || mockMembers[0];
-  const plan = membershipPlans.find(p => p.id === memberData.planId);
-  const paymentStatus = memberData.dueAmount > 0 ? 'pending' : 'paid';
+  useEffect(() => {
+    fetchPaymentData();
+  }, []);
 
-  // Mock payment history
-  const paymentHistory = [
-    {
-      id: 'pay1',
-      date: '2024-01-15',
-      amount: plan?.price || 2999,
-      method: 'UPI',
-      status: 'paid',
-      invoiceId: 'INV-2024-001',
-    },
-    {
-      id: 'pay2',
-      date: '2023-12-15',
-      amount: plan?.price || 2999,
-      method: 'Card',
-      status: 'paid',
-      invoiceId: 'INV-2023-012',
-    },
-    {
-      id: 'pay3',
-      date: '2023-11-15',
-      amount: plan?.price || 2999,
-      method: 'Cash',
-      status: 'paid',
-      invoiceId: 'INV-2023-011',
-    },
-  ];
+  const fetchPaymentData = async () => {
+    try {
+      setIsLoading(true);
+      const [memberData, plansData, paymentsData] = await Promise.all([
+        api.get('/members/me'),
+        api.get('/plans'),
+        api.get('/payments/me')
+      ]);
+      setMember(memberData);
+      setPaymentHistory(paymentsData);
+      const myPlan = plansData.find((p: MembershipPlan) => p.id === memberData.planId);
+      setPlan(myPlan);
+    } catch (error) {
+      console.error("Error fetching payment data:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleDownloadInvoice = (invoiceId: string) => {
     toast({
@@ -72,7 +69,18 @@ const MemberPayments = () => {
     });
   };
 
-  const nextPaymentDate = new Date(memberData.expiryDate);
+  if (isLoading || !member) {
+    return (
+      <DashboardLayout requiredRole="member">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  const paymentStatus = member.dueAmount > 0 ? 'pending' : 'paid';
+  const nextPaymentDate = new Date(member.expiryDate);
   const daysUntilDue = Math.ceil((nextPaymentDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
 
   return (
@@ -98,8 +106,8 @@ const MemberPayments = () => {
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Current Plan</p>
-                  <p className="text-xl font-bold text-foreground">{plan?.name}</p>
-                  <p className="text-sm text-muted-foreground">₹{plan?.price}/month</p>
+                  <p className="text-xl font-bold text-foreground">{plan?.name || 'N/A'}</p>
+                  <p className="text-sm text-muted-foreground">₹{(plan?.price || 0).toLocaleString()}/month</p>
                 </div>
               </div>
             </CardContent>
@@ -109,7 +117,7 @@ const MemberPayments = () => {
             <CardContent className="pt-6">
               <div className="flex items-center gap-4">
                 <div className={`p-3 rounded-xl ${paymentStatus === 'paid' ? 'bg-accent/20' : 'bg-warning/20'}`}>
-                  {paymentStatus === 'paid' 
+                  {paymentStatus === 'paid'
                     ? <CheckCircle className="h-6 w-6 text-accent" />
                     : <AlertCircle className="h-6 w-6 text-warning" />
                   }
@@ -119,9 +127,9 @@ const MemberPayments = () => {
                   <p className="text-xl font-bold text-foreground">
                     {paymentStatus === 'paid' ? 'All Clear' : 'Payment Due'}
                   </p>
-                  <Badge 
+                  <Badge
                     className={
-                      paymentStatus === 'paid' 
+                      paymentStatus === 'paid'
                         ? 'bg-accent/20 text-accent border-accent/30'
                         : 'bg-warning/20 text-warning border-warning/30'
                     }
@@ -142,14 +150,14 @@ const MemberPayments = () => {
                 <div>
                   <p className="text-sm text-muted-foreground">Next Payment</p>
                   <p className="text-xl font-bold text-foreground">
-                    {nextPaymentDate.toLocaleDateString('en-IN', { 
-                      day: 'numeric', 
-                      month: 'short', 
-                      year: 'numeric' 
+                    {nextPaymentDate.toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric'
                     })}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {daysUntilDue > 0 ? `${daysUntilDue} days remaining` : 'Overdue'}
+                    {daysUntilDue > 0 ? `${daysUntilDue} days remaining` : daysUntilDue === 0 ? 'Due Today' : 'Overdue'}
                   </p>
                 </div>
               </div>
@@ -169,7 +177,7 @@ const MemberPayments = () => {
                   <div>
                     <h3 className="text-lg font-semibold text-foreground">Payment Due</h3>
                     <p className="text-muted-foreground">
-                      Your membership fee of ₹{plan?.price.toLocaleString()} is pending.
+                      Your membership fee of ₹{member.dueAmount.toLocaleString()} is pending.
                     </p>
                   </div>
                 </div>
@@ -193,44 +201,55 @@ const MemberPayments = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {paymentHistory.map((payment) => (
-                <div 
-                  key={payment.id} 
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-muted/30 gap-4"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="p-2 rounded-lg bg-accent/20">
-                      <IndianRupee className="h-5 w-5 text-accent" />
+              {paymentHistory.length > 0 ? (
+                paymentHistory.map((payment) => (
+                  <div
+                    key={payment.id}
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-muted/30 gap-4"
+                  >
+                    <div className="flex items-center gap-4">
+                      <div className="p-2 rounded-lg bg-accent/20">
+                        <IndianRupee className="h-5 w-5 text-accent" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">
+                          ₹{payment.amount.toLocaleString()}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(payment.date).toLocaleDateString('en-IN', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })} • {(payment as any).method || 'Cash'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-foreground">
-                        ₹{payment.amount.toLocaleString()}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {new Date(payment.date).toLocaleDateString('en-IN', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                        })} • {payment.method}
-                      </p>
+                    <div className="flex items-center gap-3 sm:ml-auto">
+                      <Badge className={cn(
+                        "border",
+                        payment.status === 'paid' ? 'bg-accent/20 text-accent border-accent/30' : 'bg-warning/20 text-warning border-warning/30'
+                      )}>
+                        {payment.status.toUpperCase()}
+                      </Badge>
+                      {(payment as any).invoiceId && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-2"
+                          onClick={() => handleDownloadInvoice((payment as any).invoiceId)}
+                        >
+                          <Download className="h-4 w-4" />
+                          Invoice
+                        </Button>
+                      )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 sm:ml-auto">
-                    <Badge className="bg-accent/20 text-accent border-accent/30">
-                      Paid
-                    </Badge>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      className="gap-2"
-                      onClick={() => handleDownloadInvoice(payment.invoiceId)}
-                    >
-                      <Download className="h-4 w-4" />
-                      Invoice
-                    </Button>
-                  </div>
+                ))
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  No payment history found.
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
@@ -244,7 +263,7 @@ const MemberPayments = () => {
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {['UPI', 'Debit Card', 'Credit Card', 'Cash'].map((method) => (
-                <div 
+                <div
                   key={method}
                   className="p-4 rounded-lg bg-muted/30 text-center"
                 >

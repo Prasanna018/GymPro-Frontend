@@ -1,25 +1,65 @@
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { mockMembers, membershipPlans, mockPayments, mockAttendance } from '@/lib/mockData';
 import { StatCard } from '@/components/dashboard/StatCard';
 import { Badge } from '@/components/ui/badge';
 import { User, Calendar, CreditCard, CheckCircle, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api';
+import { Member, MembershipPlan, Payment, Attendance } from '@/lib/types';
 
 const MemberDashboard = () => {
   const { user } = useAuth();
-  
-  const member = mockMembers.find(m => m.email === user?.email) || mockMembers[0];
-  const plan = membershipPlans.find(p => p.id === member.planId);
-  const memberPayments = mockPayments.filter(p => p.memberId === member.id);
-  const memberAttendance = mockAttendance.filter(a => a.memberId === member.id);
+  const [member, setMember] = useState<Member | null>(null);
+  const [plan, setPlan] = useState<MembershipPlan | null>(null);
+  const [memberPayments, setMemberPayments] = useState<Payment[]>([]);
+  const [memberAttendance, setMemberAttendance] = useState<Attendance[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setIsLoading(true);
+        const [memberData, plansData, paymentsData, attendanceData] = await Promise.all([
+          api.get('/members/me'),
+          api.get('/plans'),
+          api.get('/payments/me'),
+          api.get('/attendance/me')
+        ]);
+
+        setMember(memberData);
+        setMemberPayments(paymentsData);
+        setMemberAttendance(attendanceData);
+
+        const myPlan = plansData.find((p: MembershipPlan) => p.id === memberData.planId);
+        setPlan(myPlan);
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const getDaysRemaining = () => {
+    if (!member) return 0;
     const expiry = new Date(member.expiryDate);
     const today = new Date();
     const diff = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     return diff > 0 ? diff : 0;
   };
+
+  if (isLoading || !member) {
+    return (
+      <DashboardLayout requiredRole="member">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout requiredRole="member">
@@ -37,11 +77,11 @@ const MemberDashboard = () => {
               {member.email} • {member.phone}
             </p>
           </div>
-          <Badge 
+          <Badge
             className={cn(
               'text-sm px-3 py-1.5 border self-start sm:self-auto',
-              member.status === 'active' 
-                ? 'bg-accent/20 text-accent border-accent/30' 
+              member.status === 'active'
+                ? 'bg-accent/20 text-accent border-accent/30'
                 : 'bg-destructive/20 text-destructive border-destructive/30'
             )}
           >
@@ -77,8 +117,8 @@ const MemberDashboard = () => {
                 </div>
               ))}
             </div>
-            
-            {plan && (
+
+            {plan && plan.features && (
               <div className="mt-4 pt-4 border-t border-border/30">
                 <p className="text-sm text-muted-foreground mb-3">Plan Features</p>
                 <div className="space-y-2">
@@ -101,7 +141,7 @@ const MemberDashboard = () => {
             <div className="space-y-3">
               {memberAttendance.length > 0 ? (
                 memberAttendance.slice(0, 5).map((attendance) => (
-                  <div 
+                  <div
                     key={attendance.id}
                     className="flex items-center justify-between p-3 rounded-lg bg-muted/30 gap-3"
                   >
@@ -139,17 +179,17 @@ const MemberDashboard = () => {
                 </tr>
               </thead>
               <tbody>
-                {memberPayments.map((payment) => (
+                {memberPayments.slice(0, 5).map((payment) => (
                   <tr key={payment.id} className="border-b border-border/30">
                     <td className="py-3 px-4 text-foreground text-sm">{payment.date}</td>
                     <td className="py-3 px-4 text-foreground text-sm">₹{payment.amount.toLocaleString()}</td>
                     <td className="py-3 px-4">
-                      <Badge 
+                      <Badge
                         className={cn(
                           'border text-xs',
                           payment.status === 'paid' ? 'bg-accent/20 text-accent border-accent/30' :
-                          payment.status === 'pending' ? 'bg-warning/20 text-warning border-warning/30' :
-                          'bg-destructive/20 text-destructive border-destructive/30'
+                            payment.status === 'pending' ? 'bg-warning/20 text-warning border-warning/30' :
+                              'bg-destructive/20 text-destructive border-destructive/30'
                         )}
                       >
                         {payment.status.toUpperCase()}
@@ -162,18 +202,18 @@ const MemberDashboard = () => {
           </div>
           {/* Mobile Cards */}
           <div className="sm:hidden space-y-3">
-            {memberPayments.map((payment) => (
+            {memberPayments.slice(0, 5).map((payment) => (
               <div key={payment.id} className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
                 <div>
                   <p className="font-medium text-foreground text-sm">₹{payment.amount.toLocaleString()}</p>
                   <p className="text-xs text-muted-foreground">{payment.date}</p>
                 </div>
-                <Badge 
+                <Badge
                   className={cn(
                     'border text-xs',
                     payment.status === 'paid' ? 'bg-accent/20 text-accent border-accent/30' :
-                    payment.status === 'pending' ? 'bg-warning/20 text-warning border-warning/30' :
-                    'bg-destructive/20 text-destructive border-destructive/30'
+                      payment.status === 'pending' ? 'bg-warning/20 text-warning border-warning/30' :
+                        'bg-destructive/20 text-destructive border-destructive/30'
                   )}
                 >
                   {payment.status.toUpperCase()}

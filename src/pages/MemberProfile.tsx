@@ -1,15 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { mockMembers, membershipPlans } from '@/lib/mockData';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { 
-  User, 
-  Mail, 
-  Phone, 
+import {
+  User,
+  Mail,
+  Phone,
   Calendar,
   MapPin,
   Save,
@@ -25,33 +24,96 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
+import { api } from '@/lib/api';
+import { Member, MembershipPlan } from '@/lib/types';
 
 const MemberProfile = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-
-  // Get current member's data
-  const member = mockMembers.find(m => m.id === (user?.id || '1')) || mockMembers[0];
-  const plan = membershipPlans.find(p => p.id === member.planId);
+  const [member, setMember] = useState<Member | null>(null);
+  const [plan, setPlan] = useState<MembershipPlan | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [formData, setFormData] = useState({
-    name: member.name,
-    email: member.email,
-    phone: member.phone,
-    address: member.address,
-    emergencyContact: '+91 98765 00000',
-    bloodGroup: 'O+',
-    height: '175',
-    weight: '72',
-    goal: 'Muscle Building',
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    emergencyContact: '',
+    bloodGroup: '',
+    height: '',
+    weight: '',
+    goal: '',
   });
 
-  const handleSave = () => {
-    toast({
-      title: 'Profile Updated',
-      description: 'Your profile has been updated successfully.',
-    });
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  const fetchProfile = async () => {
+    try {
+      setIsLoading(true);
+      const [memberData, plansData] = await Promise.all([
+        api.get('/members/me'),
+        api.get('/plans')
+      ]);
+      setMember(memberData);
+      const myPlan = plansData.find((p: MembershipPlan) => p.id === memberData.planId);
+      setPlan(myPlan);
+
+      setFormData({
+        name: memberData.name,
+        email: memberData.email,
+        phone: memberData.phone,
+        address: memberData.address,
+        emergencyContact: (memberData as any).emergencyContact || '',
+        bloodGroup: (memberData as any).bloodGroup || '',
+        height: (memberData as any).height?.toString() || '',
+        weight: (memberData as any).weight?.toString() || '',
+        goal: (memberData as any).goal || '',
+      });
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+    } finally {
+      setIsLoading(false);
+    }
   };
+
+  const handleSave = async () => {
+    try {
+      await api.put('/members/me', {
+        name: formData.name,
+        phone: formData.phone,
+        address: formData.address,
+        emergency_contact: formData.emergencyContact,
+        blood_group: formData.bloodGroup,
+        height: formData.height ? Number(formData.height) : null,
+        weight: formData.weight ? Number(formData.weight) : null,
+        goal: formData.goal,
+      });
+      toast({
+        title: 'Profile Updated',
+        description: 'Your profile has been updated successfully.',
+      });
+      fetchProfile();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update profile',
+        variant: 'destructive'
+      });
+    }
+  };
+
+  if (isLoading || !member) {
+    return (
+      <DashboardLayout requiredRole="member">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   const daysRemaining = Math.ceil(
     (new Date(member.expiryDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
@@ -81,10 +143,8 @@ const MemberProfile = () => {
           <CardContent className="pt-6">
             <div className="flex flex-col md:flex-row items-center gap-6">
               <div className="relative">
-                <div className="h-24 w-24 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                  <span className="text-3xl font-bold text-white">
-                    {member.name.charAt(0)}
-                  </span>
+                <div className="h-24 w-24 rounded-full bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white text-3xl font-bold uppercase">
+                  {member.name.charAt(0)}
                 </div>
                 <button className="absolute bottom-0 right-0 p-2 rounded-full bg-primary text-primary-foreground">
                   <Camera className="h-4 w-4" />
@@ -95,11 +155,11 @@ const MemberProfile = () => {
                 <p className="text-muted-foreground">{member.email}</p>
                 <div className="flex flex-wrap gap-2 mt-3 justify-center md:justify-start">
                   <Badge className="bg-primary/20 text-primary border-primary/30">
-                    {plan?.name}
+                    {plan?.name || 'Loading Plan...'}
                   </Badge>
-                  <Badge 
+                  <Badge
                     className={
-                      member.status === 'active' 
+                      member.status === 'active'
                         ? 'bg-accent/20 text-accent border-accent/30'
                         : 'bg-warning/20 text-warning border-warning/30'
                     }
@@ -138,16 +198,16 @@ const MemberProfile = () => {
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+              <div className="space-y-2 opacity-70">
+                <Label htmlFor="email">Email (Cannot be changed)</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="email"
                     type="email"
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="pl-10"
+                    readOnly
+                    className="pl-10 bg-muted/20"
                   />
                 </div>
               </div>
@@ -238,13 +298,23 @@ const MemberProfile = () => {
                   />
                 </div>
               </div>
-              <div className="p-4 rounded-lg bg-muted/30 mt-4">
-                <p className="text-sm text-muted-foreground mb-2">Your BMI</p>
-                <p className="text-2xl font-bold text-foreground">
-                  {(Number(formData.weight) / Math.pow(Number(formData.height) / 100, 2)).toFixed(1)}
-                </p>
-                <p className="text-sm text-accent">Normal Weight</p>
-              </div>
+              {Number(formData.weight) > 0 && Number(formData.height) > 0 && (
+                <div className="p-4 rounded-lg bg-muted/30 mt-4">
+                  <p className="text-sm text-muted-foreground mb-2">Your BMI</p>
+                  <p className="text-2xl font-bold text-foreground">
+                    {(Number(formData.weight) / Math.pow(Number(formData.height) / 100, 2)).toFixed(1)}
+                  </p>
+                  <p className="text-sm text-accent">
+                    {(() => {
+                      const bmi = Number(formData.weight) / Math.pow(Number(formData.height) / 100, 2);
+                      if (bmi < 18.5) return 'Underweight';
+                      if (bmi < 25) return 'Normal Weight';
+                      if (bmi < 30) return 'Overweight';
+                      return 'Obese';
+                    })()}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -261,11 +331,11 @@ const MemberProfile = () => {
               <div className="grid md:grid-cols-4 gap-6">
                 <div className="p-4 rounded-lg bg-muted/30">
                   <p className="text-sm text-muted-foreground mb-1">Plan</p>
-                  <p className="text-lg font-semibold text-foreground">{plan?.name}</p>
+                  <p className="text-lg font-semibold text-foreground">{plan?.name || 'N/A'}</p>
                 </div>
                 <div className="p-4 rounded-lg bg-muted/30">
                   <p className="text-sm text-muted-foreground mb-1">Price</p>
-                  <p className="text-lg font-semibold text-foreground">₹{plan?.price}/month</p>
+                  <p className="text-lg font-semibold text-foreground">₹{plan?.price || 0}/month</p>
                 </div>
                 <div className="p-4 rounded-lg bg-muted/30">
                   <p className="text-sm text-muted-foreground mb-1">Start Date</p>
@@ -288,21 +358,23 @@ const MemberProfile = () => {
                   </p>
                 </div>
               </div>
-              <div className="mt-6 p-4 rounded-lg bg-primary/10 border border-primary/20">
-                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                  <div>
-                    <h4 className="font-semibold text-foreground">Plan Features</h4>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {plan?.features.map((feature, index) => (
-                        <Badge key={index} variant="outline" className="border-primary/30 text-primary">
-                          {feature}
-                        </Badge>
-                      ))}
+              {plan && (
+                <div className="mt-6 p-4 rounded-lg bg-primary/10 border border-primary/20">
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div>
+                      <h4 className="font-semibold text-foreground">Plan Features</h4>
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {plan.features.map((feature, index) => (
+                          <Badge key={index} variant="outline" className="border-primary/30 text-primary">
+                            {feature}
+                          </Badge>
+                        ))}
+                      </div>
                     </div>
+                    <Button variant="outline" disabled>Upgrade Plan (Coming Soon)</Button>
                   </div>
-                  <Button variant="outline">Upgrade Plan</Button>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </div>

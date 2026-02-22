@@ -26,18 +26,19 @@ const MemberAttendance = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const [selectedMonth, setSelectedMonth] = useState(new Date());
-  const [memberAttendance, setMemberAttendance] = useState<any[]>([]);
+  const [allAttendance, setAllAttendance] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     fetchAttendance();
-  }, [selectedMonth]);
+  }, []);
 
   const fetchAttendance = async () => {
     try {
       setIsLoading(true);
-      const data = await api.get(`/attendance/me?month=${selectedMonth.getMonth() + 1}&year=${selectedMonth.getFullYear()}`);
-      setMemberAttendance(data);
+      // Fetch all attendance to calculate stats correctly
+      const data = await api.get('/attendance/me');
+      setAllAttendance(data);
     } catch (err) {
       console.error(err);
     } finally {
@@ -45,14 +46,74 @@ const MemberAttendance = () => {
     }
   };
 
-  const currentMonthAttendance = memberAttendance.filter(a => {
+  const currentMonthAttendance = allAttendance.filter(a => {
     const date = new Date(a.date);
     return date.getMonth() === selectedMonth.getMonth() &&
       date.getFullYear() === selectedMonth.getFullYear();
   });
 
+  const calculateStreak = (records: any[]) => {
+    if (records.length === 0) return 0;
+    const sorted = [...records].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+    let streak = 0;
+    let currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+
+    const todayStr = currentDate.toISOString().split('T')[0];
+    const hasToday = sorted.some(r => r.date === todayStr);
+
+    if (!hasToday) {
+      currentDate.setDate(currentDate.getDate() - 1);
+    }
+
+    for (const record of sorted) {
+      const recordDate = new Date(record.date);
+      recordDate.setHours(0, 0, 0, 0);
+
+      if (recordDate.getTime() === currentDate.getTime()) {
+        streak++;
+        currentDate.setDate(currentDate.getDate() - 1);
+      } else if (recordDate.getTime() < currentDate.getTime()) {
+        break;
+      }
+    }
+    return streak;
+  };
+
+  const calculateTotalHours = (records: any[]) => {
+    let totalMinutes = 0;
+    records.forEach(r => {
+      if (r.checkIn && r.checkOut) {
+        const [inH, inM] = r.checkIn.split(':').map(Number);
+        const [outH, outM] = r.checkOut.split(':').map(Number);
+        totalMinutes += (outH * 60 + outM) - (inH * 60 + inM);
+      }
+    });
+    return Math.floor(totalMinutes / 60);
+  };
+
+  const calculateAverageTime = (records: any[]) => {
+    const validRecords = records.filter(r => r.checkIn && r.checkOut);
+    if (validRecords.length === 0) return '0h 0m';
+
+    let totalMinutes = 0;
+    validRecords.forEach(r => {
+      const [inH, inM] = r.checkIn.split(':').map(Number);
+      const [outH, outM] = r.checkOut.split(':').map(Number);
+      totalMinutes += (outH * 60 + outM) - (inH * 60 + inM);
+    });
+
+    const avgMinutes = Math.floor(totalMinutes / validRecords.length);
+    const h = Math.floor(avgMinutes / 60);
+    const m = avgMinutes % 60;
+    return `${h}h ${m}m`;
+  };
+
   const totalDaysThisMonth = currentMonthAttendance.length;
-  const averageTime = '1h 45m'; // Mock average workout time
+  const currentStreak = calculateStreak(allAttendance);
+  const totalHours = calculateTotalHours(allAttendance);
+  const averageTime = calculateAverageTime(allAttendance);
 
   const changeMonth = (delta: number) => {
     const newDate = new Date(selectedMonth);
@@ -68,15 +129,17 @@ const MemberAttendance = () => {
         description: 'Your attendance has been recorded. Have a great workout!',
       });
       fetchAttendance();
-    } catch (error) {
-      console.error('Failed to checkin', error);
-      toast({ title: 'Check In Failed', description: 'Could not mark attendance.', variant: 'destructive' });
+    } catch (error: any) {
+      toast({
+        title: 'Check In Failed',
+        description: error.message || 'Could not mark attendance.',
+        variant: 'destructive'
+      });
     }
   };
 
   const monthName = selectedMonth.toLocaleString('default', { month: 'long', year: 'numeric' });
 
-  // Generate calendar days
   const generateCalendarDays = () => {
     const year = selectedMonth.getFullYear();
     const month = selectedMonth.getMonth();
@@ -84,12 +147,10 @@ const MemberAttendance = () => {
     const lastDay = new Date(year, month + 1, 0);
     const days = [];
 
-    // Add empty days for padding
     for (let i = 0; i < firstDay.getDay(); i++) {
       days.push(null);
     }
 
-    // Add actual days
     for (let day = 1; day <= lastDay.getDate(); day++) {
       const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
       const attendance = currentMonthAttendance.find(a => a.date === dateStr);
@@ -128,7 +189,7 @@ const MemberAttendance = () => {
                 <Calendar className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Days This Month</p>
+                <p className="text-sm text-muted-foreground">Days {selectedMonth.toLocaleString('default', { month: 'short' })}</p>
                 <p className="text-2xl font-bold text-foreground">{totalDaysThisMonth}</p>
               </div>
             </div>
@@ -140,7 +201,7 @@ const MemberAttendance = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Current Streak</p>
-                <p className="text-2xl font-bold text-foreground">5 days</p>
+                <p className="text-2xl font-bold text-foreground">{currentStreak} days</p>
               </div>
             </div>
           </div>
@@ -162,7 +223,7 @@ const MemberAttendance = () => {
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Hours</p>
-                <p className="text-2xl font-bold text-foreground">28h</p>
+                <p className="text-2xl font-bold text-foreground">{totalHours}h</p>
               </div>
             </div>
           </div>
@@ -202,9 +263,9 @@ const MemberAttendance = () => {
                   className={`
                     aspect-square rounded-lg flex items-center justify-center text-xs md:text-sm
                     ${day === null
-                      ? ''
+                      ? 'bg-transparent'
                       : day.attended
-                        ? 'bg-accent/20 text-accent border border-accent/30'
+                        ? 'bg-accent/20 text-accent border border-accent/30 font-bold'
                         : 'bg-muted/30 text-muted-foreground'
                     }
                   `}
@@ -230,37 +291,40 @@ const MemberAttendance = () => {
         <Card className="bg-gradient-card border-border/50">
           <CardHeader>
             <CardTitle className="text-foreground">Recent Check-ins</CardTitle>
-            <CardDescription>Your last 5 gym visits</CardDescription>
+            <CardDescription>Your latest gym visits</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {memberAttendance.slice(0, 5).map((record, index) => (
-                <div key={index} className="flex items-center justify-between p-4 rounded-lg bg-muted/30">
-                  <div className="flex items-center gap-4">
-                    <div className="p-2 rounded-lg bg-accent/20">
-                      <Calendar className="h-5 w-5 text-accent" />
+              {allAttendance.length > 0 ? (
+                allAttendance.slice(0, 5).map((record, index) => (
+                  <div key={index} className="flex items-center justify-between p-4 rounded-lg bg-muted/30">
+                    <div className="flex items-center gap-4">
+                      <div className="p-2 rounded-lg bg-accent/20">
+                        <Calendar className="h-5 w-5 text-accent" />
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">
+                          {new Date(record.date).toLocaleDateString('en-US', {
+                            weekday: 'long',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {record.checkIn} - {record.checkOut || 'Active'}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-foreground">
-                        {new Date(record.date).toLocaleDateString('en-US', {
-                          weekday: 'long',
-                          month: 'short',
-                          day: 'numeric'
-                        })}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {record.check_in} - {record.check_out || 'Active'}
-                      </p>
-                    </div>
+                    <Badge className="bg-accent/20 text-accent border-accent/30 border">
+                      {record.checkOut ? 'Completed' : 'In Progress'}
+                    </Badge>
                   </div>
-                  <Badge className="bg-accent/20 text-accent border-accent/30">
-                    {record.check_out
-                      ? 'Completed'
-                      : 'In Progress'
-                    }
-                  </Badge>
+                ))
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  No attendance records found. Click "Check In Now" to start!
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>

@@ -78,7 +78,8 @@ const Members = () => {
           email: formData.email,
           phone: formData.phone,
           address: formData.address,
-          plan_id: formData.planId
+          plan_id: formData.planId,
+          password: formData.password || undefined
         });
         toast({
           title: 'Member Updated',
@@ -218,19 +219,19 @@ const Members = () => {
                   />
                 </div>
 
-                {!editingMember && (
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Login Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={formData.password}
-                      onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      placeholder="Set login password for member"
-                      required
-                    />
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label htmlFor="password">
+                    {editingMember ? 'Reset Password (Optional)' : 'Login Password'}
+                  </Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    placeholder={editingMember ? 'Enter new password to reset' : 'Set login password for member'}
+                    required={!editingMember}
+                  />
+                </div>
 
                 <div className="space-y-2">
                   <Label>Membership Plan</Label>

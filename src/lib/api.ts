@@ -6,6 +6,10 @@ const toCamel = (str: string) => {
     });
 };
 
+const toSnake = (str: string) => {
+    return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+};
+
 const keysToCamel = function (o: any): any {
     if (o === Object(o) && !Array.isArray(o) && typeof o !== 'function') {
         const n: any = {};
@@ -15,6 +19,19 @@ const keysToCamel = function (o: any): any {
         return n;
     } else if (Array.isArray(o)) {
         return o.map((i) => keysToCamel(i));
+    }
+    return o;
+};
+
+const keysToSnake = function (o: any): any {
+    if (o === Object(o) && !Array.isArray(o) && typeof o !== 'function') {
+        const n: any = {};
+        Object.keys(o).forEach((k) => {
+            n[toSnake(k)] = keysToSnake(o[k]);
+        });
+        return n;
+    } else if (Array.isArray(o)) {
+        return o.map((i) => keysToSnake(i));
     }
     return o;
 };
@@ -53,7 +70,7 @@ export const api = {
         const response = await fetch(`${API_URL}${endpoint}`, {
             method: 'POST',
             headers,
-            body: JSON.stringify(data),
+            body: JSON.stringify(keysToSnake(data)),
         });
 
         if (!response.ok) {
@@ -75,7 +92,7 @@ export const api = {
         const response = await fetch(`${API_URL}${endpoint}`, {
             method: 'PUT',
             headers,
-            body: JSON.stringify(data),
+            body: JSON.stringify(keysToSnake(data)),
         });
 
         if (!response.ok) {

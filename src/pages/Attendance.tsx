@@ -49,13 +49,14 @@ const Attendance = () => {
   const activeMembersList = members.filter(m => m.status === 'active');
 
   const membersWithAttendance = activeMembersList.map(member => {
-    const attendance = attendanceRecords.find(a => a.member_id === member.id);
+    // api.get runs keysToCamel() so member_id → memberId, check_in → checkIn, etc.
+    const attendance = attendanceRecords.find(a => a.memberId === member.id);
     return {
       ...member,
       checkedIn: !!attendance,
       attendanceId: attendance?.id,
-      checkInTime: attendance?.check_in,
-      checkOutTime: attendance?.check_out,
+      checkInTime: attendance?.checkIn,
+      checkOutTime: attendance?.checkOut,
     };
   });
 
@@ -235,7 +236,7 @@ const Attendance = () => {
                       {!member.checkedIn ? (
                         <Button variant="hero" size="sm" onClick={() => handleCheckIn(member.id, member.name)}>Check In</Button>
                       ) : !member.checkOutTime ? (
-                        <Button variant="outline" size="sm" onClick={() => handleCheckOut(member.id, member.name)}>Check Out</Button>
+                        <Button variant="outline" size="sm" onClick={() => handleCheckOut(member.attendanceId, member.name)}>Check Out</Button>
                       ) : (
                         <span className="text-sm text-muted-foreground">Completed</span>
                       )}
@@ -278,7 +279,7 @@ const Attendance = () => {
               {!member.checkedIn ? (
                 <Button variant="hero" size="sm" className="w-full" onClick={() => handleCheckIn(member.id, member.name)}>Check In</Button>
               ) : !member.checkOutTime ? (
-                <Button variant="outline" size="sm" className="w-full" onClick={() => handleCheckOut(member.id, member.name)}>Check Out</Button>
+                <Button variant="outline" size="sm" className="w-full" onClick={() => handleCheckOut(member.attendanceId, member.name)}>Check Out</Button>
               ) : (
                 <p className="text-sm text-center text-muted-foreground">Completed</p>
               )}

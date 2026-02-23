@@ -1,12 +1,12 @@
 import { Button } from '@/components/ui/button';
 import { Navbar } from '@/components/layout/Navbar';
 import { Link } from 'react-router-dom';
-import { 
-  Dumbbell, 
-  Users, 
-  CreditCard, 
-  ShoppingBag, 
-  Bell, 
+import {
+  Dumbbell,
+  Users,
+  CreditCard,
+  ShoppingBag,
+  Bell,
   ChevronRight,
   CheckCircle,
   ArrowRight
@@ -46,19 +46,19 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
+
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
         {/* Background Image */}
         <div className="absolute inset-0">
-          <img 
-            src={heroImage} 
-            alt="Modern gym interior" 
+          <img
+            src={heroImage}
+            alt="Modern gym interior"
             className="w-full h-full object-cover opacity-40"
           />
           <div className="absolute inset-0 bg-gradient-to-b from-background/80 via-background/60 to-background" />
         </div>
-        
+
         {/* Hero Content */}
         <div className="relative z-10 container mx-auto px-4 pt-20 text-center">
           <div className="max-w-4xl mx-auto animate-fade-in">
@@ -66,17 +66,17 @@ const Index = () => {
               <Dumbbell className="h-4 w-4 text-primary" />
               <span className="text-sm text-primary font-medium">Complete Gym Management Solution</span>
             </div>
-            
+
             <h1 className="font-display text-6xl md:text-8xl lg:text-9xl tracking-tight mb-6">
               <span className="text-foreground">GYM</span>
               <span className="text-gradient-primary">PRO</span>
             </h1>
-            
+
             <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto mb-10">
-              Digitize your gym operations. Manage members, track fees, run your supplement store, 
+              Digitize your gym operations. Manage members, track fees, run your supplement store,
               and automate reminders — all in one powerful platform.
             </p>
-            
+
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link to="/login">
                 <Button variant="hero" size="xl" className="gap-2 w-full sm:w-auto">
@@ -91,7 +91,7 @@ const Index = () => {
               </Link>
             </div>
           </div>
-          
+
           {/* Scroll Indicator */}
           <div className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-bounce">
             <ChevronRight className="h-8 w-8 text-primary rotate-90" />
@@ -110,10 +110,10 @@ const Index = () => {
               Everything you need to run a modern gym, from member management to automated reminders.
             </p>
           </div>
-          
+
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             {features.map((feature, index) => (
-              <div 
+              <div
                 key={feature.title}
                 className="stat-card"
                 style={{ animationDelay: `${index * 100}ms` }}
@@ -144,23 +144,22 @@ const Index = () => {
               Flexible plans designed to meet your fitness goals and budget.
             </p>
           </div>
-          
+
           <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
             {plans.map((plan) => (
-              <div 
+              <div
                 key={plan.name}
-                className={`relative bg-gradient-card rounded-2xl p-8 border transition-all duration-300 hover:-translate-y-2 ${
-                  plan.popular 
-                    ? 'border-primary shadow-glow' 
+                className={`relative bg-gradient-card rounded-2xl p-8 border transition-all duration-300 hover:-translate-y-2 ${plan.popular
+                    ? 'border-primary shadow-glow'
                     : 'border-border/50 hover:border-primary/30'
-                }`}
+                  }`}
               >
                 {plan.popular && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary rounded-full text-xs font-bold text-primary-foreground">
                     MOST POPULAR
                   </div>
                 )}
-                
+
                 <div className="text-center mb-6">
                   <h3 className="font-display text-2xl text-foreground mb-2">
                     {plan.name}
@@ -169,7 +168,7 @@ const Index = () => {
                     {plan.price}
                   </div>
                 </div>
-                
+
                 <ul className="space-y-3 mb-8">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex items-center gap-3 text-sm text-muted-foreground">
@@ -178,9 +177,9 @@ const Index = () => {
                     </li>
                   ))}
                 </ul>
-                
-                <Button 
-                  variant={plan.popular ? "hero" : "outline"} 
+
+                <Button
+                  variant={plan.popular ? "hero" : "outline"}
                   className="w-full"
                 >
                   Choose Plan
@@ -196,7 +195,7 @@ const Index = () => {
         <div className="container mx-auto px-4">
           <div className="relative rounded-3xl overflow-hidden bg-gradient-card border border-border/50 p-12 md:p-16 text-center">
             <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,hsl(175,95%,50%,0.1),transparent_70%)]" />
-            
+
             <div className="relative z-10">
               <h2 className="font-display text-4xl md:text-5xl text-foreground mb-4">
                 READY TO <span className="text-gradient-primary">TRANSFORM</span> YOUR GYM?
@@ -224,7 +223,7 @@ const Index = () => {
               <span className="font-display text-xl text-gradient-primary">GYMPRO</span>
             </div>
             <p className="text-sm text-muted-foreground">
-              © 2024 GymPro. College Project - Gym Management System.
+              © {new Date().getFullYear()} GymPro. College Project - Gym Management System.
             </p>
           </div>
         </div>

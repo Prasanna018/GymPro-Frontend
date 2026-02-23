@@ -95,7 +95,7 @@ export const SidebarContent = ({ userRole, onLinkClick }: SidebarProps) => {
           Logout
         </button>
         <div className="px-3 py-2 text-xs text-muted-foreground text-center">
-          © 2024 GymPro
+          © {new Date().getFullYear()} GymPro
         </div>
       </div>
     </div>

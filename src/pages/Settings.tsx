@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTheme } from 'next-themes';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,7 +14,10 @@ import {
   Palette,
   Save,
   Upload,
-  Loader2
+  Loader2,
+  Sun,
+  Moon,
+  Monitor
 } from 'lucide-react';
 import {
   Card,
@@ -27,6 +31,7 @@ import { api } from '@/lib/api';
 
 const Settings = () => {
   const { toast } = useToast();
+  const { theme, setTheme } = useTheme();
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -372,17 +377,26 @@ const Settings = () => {
                 <div>
                   <Label className="mb-3 block">Theme</Label>
                   <div className="grid grid-cols-3 gap-3">
-                    <button className="p-4 rounded-xl border-2 border-primary bg-primary/10 text-center">
-                      <div className="h-4 w-4 rounded-full bg-primary mx-auto mb-2" />
+                    <button
+                      onClick={() => setTheme('dark')}
+                      className={`p-4 rounded-xl border-2 text-center transition-all ${theme === 'dark' ? 'border-primary bg-primary/10' : 'border-border/50 opacity-60 hover:opacity-100'}`}
+                    >
+                      <Moon className="h-5 w-5 mx-auto mb-2 text-primary" />
                       <span className="text-sm text-foreground">Dark</span>
                     </button>
-                    <button className="p-4 rounded-xl border border-border/50 text-center opacity-50">
-                      <div className="h-4 w-4 rounded-full bg-muted mx-auto mb-2" />
-                      <span className="text-sm text-muted-foreground">Light</span>
+                    <button
+                      onClick={() => setTheme('light')}
+                      className={`p-4 rounded-xl border-2 text-center transition-all ${theme === 'light' ? 'border-primary bg-primary/10' : 'border-border/50 opacity-60 hover:opacity-100'}`}
+                    >
+                      <Sun className="h-5 w-5 mx-auto mb-2 text-accent" />
+                      <span className="text-sm text-foreground">Light</span>
                     </button>
-                    <button className="p-4 rounded-xl border border-border/50 text-center opacity-50">
-                      <div className="h-4 w-4 rounded-full bg-gradient-to-r from-primary to-accent mx-auto mb-2" />
-                      <span className="text-sm text-muted-foreground">Auto</span>
+                    <button
+                      onClick={() => setTheme('system')}
+                      className={`p-4 rounded-xl border-2 text-center transition-all ${theme === 'system' ? 'border-primary bg-primary/10' : 'border-border/50 opacity-60 hover:opacity-100'}`}
+                    >
+                      <Monitor className="h-5 w-5 mx-auto mb-2 text-info" />
+                      <span className="text-sm text-foreground">Auto</span>
                     </button>
                   </div>
                 </div>

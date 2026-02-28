@@ -11,10 +11,10 @@ import {
   Minus,
   Plus,
   ShoppingBag,
-  Tag,
   CheckCircle,
   IndianRupee,
-  Trash2
+  Loader2,
+  Shield,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
@@ -35,6 +35,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { openRazorpayCheckout } from '@/lib/razorpay';
 
 interface CartItem {
   supplement: Supplement;
@@ -48,6 +49,8 @@ const MemberStore = () => {
   const [gymSettings, setGymSettings] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('All');
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -128,21 +131,79 @@ const MemberStore = () => {
   const cartItemCount = cart.reduce((count, item) => count + item.quantity, 0);
 
   const handleCheckout = async () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || isCheckingOut) return;
+    setIsCheckingOut(true);
+
     try {
+      // Step 1: Create Razorpay order (validates stock server-side)
       const payload = {
-        items: cart.map(c => ({ supplement_id: c.supplement.id, quantity: c.quantity }))
+        items: cart.map(c => ({
+          supplementId: c.supplement.id,
+          quantity: c.quantity,
+          price: c.supplement.price,
+        })),
       };
-      await api.post('/orders', payload);
-      toast({
-        title: 'Order Placed!',
-        description: 'Your order has been placed. Please pay at the counter.',
+
+      const orderData = await api.post('/razorpay/create-store-order', payload);
+
+      // Step 2: Open Razorpay checkout
+      await openRazorpayCheckout({
+        keyId: orderData.keyId,
+        orderId: orderData.razorpayOrderId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: gymSettings?.gymName || 'GymPro Store',
+        description: `Supplement Purchase (${cartItemCount} item${cartItemCount !== 1 ? 's' : ''})`,
+        prefillName: orderData.memberName,
+        prefillEmail: orderData.memberEmail,
+        onSuccess: async (response) => {
+          try {
+            // Step 3: Verify payment and fulfill order
+            await api.post('/razorpay/verify-store-payment', {
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+              items: cart.map(c => ({
+                supplementId: c.supplement.id,
+                quantity: c.quantity,
+                price: c.supplement.price,
+              })),
+              total: cartTotal,
+            });
+
+            toast({
+              title: '🎉 Order Placed Successfully!',
+              description: `Your order of ₹${cartTotal.toLocaleString()} was paid and confirmed.`,
+            });
+
+            setCart([]);
+            setIsCartOpen(false);
+            await fetchSupplements(); // Refresh stock
+          } catch (verifyError: any) {
+            toast({
+              title: 'Order Verification Failed',
+              description: verifyError.message || 'Payment received but order confirmation failed. Contact support.',
+              variant: 'destructive',
+            });
+          } finally {
+            setIsCheckingOut(false);
+          }
+        },
+        onDismiss: () => {
+          setIsCheckingOut(false);
+          toast({
+            title: 'Payment Cancelled',
+            description: 'Your cart is still saved. Complete payment to confirm your order.',
+          });
+        },
       });
-      setCart([]);
-      fetchSupplements(); // Refresh stock
     } catch (error: any) {
-      console.error('Checkout failed:', error);
-      toast({ title: 'Checkout Failed', description: error.message || 'Could not place order.', variant: 'destructive' });
+      setIsCheckingOut(false);
+      toast({
+        title: 'Checkout Failed',
+        description: error.message || 'Could not initiate checkout. Please try again.',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -160,7 +221,7 @@ const MemberStore = () => {
             </p>
           </div>
 
-          <Sheet>
+          <Sheet open={isCartOpen} onOpenChange={setIsCartOpen}>
             <SheetTrigger asChild>
               <Button variant="hero" className="gap-2 relative h-12 px-6">
                 <ShoppingCart className="h-5 w-5" />
@@ -178,15 +239,15 @@ const MemberStore = () => {
                   <ShoppingCart className="h-6 w-6 text-primary" />
                   YOUR <span className="text-gradient-primary">CART</span>
                 </SheetTitle>
-                <SheetDescription>Verify your items before placing the order.</SheetDescription>
+                <SheetDescription>Review items and pay securely with Razorpay.</SheetDescription>
               </SheetHeader>
 
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {cart.length > 0 ? (
                   cart.map((item) => (
                     <div key={item.supplement.id} className="flex items-center gap-4 p-4 rounded-xl bg-card border border-border/50 shadow-sm hover:shadow-md transition-all group">
-                      <div className="h-16 w-16 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                        <ShoppingBag className="h-8 w-8 text-primary" />
+                      <div className="h-14 w-14 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                        <ShoppingBag className="h-7 w-7 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <h4 className="font-semibold text-foreground truncate">{item.supplement.name}</h4>
@@ -211,6 +272,9 @@ const MemberStore = () => {
                               <Plus className="h-3 w-3" />
                             </Button>
                           </div>
+                          <span className="text-sm text-muted-foreground">
+                            = ₹{(item.supplement.price * item.quantity).toLocaleString()}
+                          </span>
                         </div>
                       </div>
                       <Button
@@ -233,22 +297,39 @@ const MemberStore = () => {
 
               {cart.length > 0 && (
                 <SheetFooter className="p-6 border-t border-border/50 bg-card/50 flex-col gap-4 sm:flex-col">
-                  <div className="w-full space-y-3">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-muted-foreground">Order Subtotal</span>
-                      <span className="font-medium">₹{cartTotal.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-xl font-display">
-                      <span className="text-foreground">TOTAL AMOUNT</span>
+                  <div className="w-full space-y-2">
+                    {cart.map(item => (
+                      <div key={item.supplement.id} className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">{item.supplement.name} × {item.quantity}</span>
+                        <span>₹{(item.supplement.price * item.quantity).toLocaleString()}</span>
+                      </div>
+                    ))}
+                    <div className="border-t border-border/30 pt-2 flex justify-between items-center text-xl font-display">
+                      <span className="text-foreground">TOTAL</span>
                       <span className="text-gradient-primary font-bold">₹{cartTotal.toLocaleString()}</span>
                     </div>
                   </div>
-                  <Button variant="hero" className="w-full h-12 text-lg gap-2" onClick={handleCheckout}>
-                    <CheckCircle className="h-5 w-5" />
-                    Place Order
+                  <Button
+                    variant="hero"
+                    className="w-full h-12 text-lg gap-2"
+                    onClick={handleCheckout}
+                    disabled={isCheckingOut}
+                  >
+                    {isCheckingOut ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Processing Payment...
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-5 w-5" />
+                        Pay ₹{cartTotal.toLocaleString()}
+                      </>
+                    )}
                   </Button>
-                  <p className="text-xs text-center text-muted-foreground">
-                    Items will be reserved. Pay at the counter to collect.
+                  <p className="text-xs text-center text-muted-foreground flex items-center justify-center gap-1">
+                    <Shield className="h-3 w-3 text-accent" />
+                    Secured by Razorpay · UPI, Cards, NetBanking accepted
                   </p>
                 </SheetFooter>
               )}
@@ -317,9 +398,9 @@ const MemberStore = () => {
                       </span>
                     </div>
                     <div className="flex flex-col items-end">
-                      <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Availability</span>
+                      <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Stock</span>
                       <span className={`text-sm font-medium ${product.stock > 10 ? 'text-accent' : product.stock > 0 ? 'text-warning' : 'text-destructive'}`}>
-                        {product.stock > 0 ? `${product.stock} in stock` : 'Out of stock'}
+                        {product.stock > 0 ? `${product.stock} left` : 'Out of stock'}
                       </span>
                     </div>
                   </div>

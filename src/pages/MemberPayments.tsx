@@ -10,7 +10,10 @@ import {
   AlertCircle,
   Download,
   CreditCard,
-  Receipt
+  Receipt,
+  Loader2,
+  Shield,
+  Zap,
 } from 'lucide-react';
 import {
   Card,
@@ -23,6 +26,7 @@ import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
 import { Member, MembershipPlan, Payment } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import { openRazorpayCheckout } from '@/lib/razorpay';
 
 const MemberPayments = () => {
   const { user } = useAuth();
@@ -31,6 +35,7 @@ const MemberPayments = () => {
   const [plan, setPlan] = useState<MembershipPlan | null>(null);
   const [paymentHistory, setPaymentHistory] = useState<Payment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPayingNow, setIsPayingNow] = useState(false);
 
   useEffect(() => {
     fetchPaymentData();
@@ -55,17 +60,75 @@ const MemberPayments = () => {
     }
   };
 
+  const handlePayNow = async () => {
+    if (!member || member.dueAmount <= 0) return;
+    setIsPayingNow(true);
+
+    try {
+      // Step 1: Create Razorpay order
+      const orderData = await api.post('/razorpay/create-membership-order', {});
+
+      // Step 2: Open Razorpay checkout
+      await openRazorpayCheckout({
+        keyId: orderData.keyId,
+        orderId: orderData.razorpayOrderId,
+        amount: orderData.amount,
+        currency: orderData.currency,
+        name: 'GymPro Membership',
+        description: `Membership Fee — ${plan?.name || 'Membership Plan'}`,
+        prefillName: member.name,
+        prefillEmail: member.email,
+        prefillContact: member.phone,
+        onSuccess: async (response) => {
+          try {
+            // Step 3: Verify payment on backend
+            await api.post('/razorpay/verify-membership-payment', {
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+              amount: member.dueAmount,
+              planId: member.planId,
+            });
+
+            toast({
+              title: '🎉 Payment Successful!',
+              description: `₹${member.dueAmount.toLocaleString()} paid successfully. Your membership is active!`,
+            });
+
+            // Refresh data
+            await fetchPaymentData();
+          } catch (verifyError: any) {
+            toast({
+              title: 'Verification Failed',
+              description: verifyError.message || 'Payment was received but verification failed. Please contact support.',
+              variant: 'destructive',
+            });
+          } finally {
+            setIsPayingNow(false);
+          }
+        },
+        onDismiss: () => {
+          setIsPayingNow(false);
+          toast({
+            title: 'Payment Cancelled',
+            description: 'You cancelled the payment. Your dues are still pending.',
+          });
+        },
+      });
+    } catch (error: any) {
+      setIsPayingNow(false);
+      toast({
+        title: 'Payment Failed',
+        description: error.message || 'Could not initiate payment. Please try again.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   const handleDownloadInvoice = (invoiceId: string) => {
     toast({
       title: 'Invoice Downloaded',
       description: `${invoiceId} has been downloaded.`,
-    });
-  };
-
-  const handlePayNow = () => {
-    toast({
-      title: 'Payment Initiated',
-      description: 'Please complete the payment at the counter.',
     });
   };
 
@@ -92,7 +155,7 @@ const MemberPayments = () => {
             MY <span className="text-gradient-primary">PAYMENTS</span>
           </h1>
           <p className="text-muted-foreground mt-1">
-            View your payment history and manage dues.
+            View your payment history and pay dues online instantly.
           </p>
         </div>
 
@@ -134,7 +197,7 @@ const MemberPayments = () => {
                         : 'bg-warning/20 text-warning border-warning/30'
                     }
                   >
-                    {paymentStatus === 'paid' ? 'Paid' : 'Pending'}
+                    {paymentStatus === 'paid' ? 'Paid' : `₹${member.dueAmount.toLocaleString()} Due`}
                   </Badge>
                 </div>
               </div>
@@ -167,23 +230,47 @@ const MemberPayments = () => {
 
         {/* Pay Now Section (if pending) */}
         {paymentStatus === 'pending' && (
-          <Card className="bg-gradient-to-r from-warning/10 to-warning/5 border-warning/30">
+          <Card className="bg-gradient-to-r from-warning/10 to-primary/5 border-warning/30">
             <CardContent className="pt-6">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 rounded-xl bg-warning/20">
+              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 rounded-xl bg-warning/20 mt-1">
                     <AlertCircle className="h-8 w-8 text-warning" />
                   </div>
                   <div>
                     <h3 className="text-lg font-semibold text-foreground">Payment Due</h3>
                     <p className="text-muted-foreground">
-                      Your membership fee of ₹{member.dueAmount.toLocaleString()} is pending.
+                      Your membership fee of{' '}
+                      <span className="text-foreground font-semibold">₹{member.dueAmount.toLocaleString()}</span>{' '}
+                      is pending.
                     </p>
+                    <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Shield className="h-3 w-3 text-accent" /> Secured by Razorpay
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Zap className="h-3 w-3 text-primary" /> Instant confirmation
+                      </span>
+                    </div>
                   </div>
                 </div>
-                <Button variant="hero" className="gap-2" onClick={handlePayNow}>
-                  <IndianRupee className="h-4 w-4" />
-                  Pay Now
+                <Button
+                  variant="hero"
+                  className="gap-2 min-w-[160px] h-12 text-base"
+                  onClick={handlePayNow}
+                  disabled={isPayingNow}
+                >
+                  {isPayingNow ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <IndianRupee className="h-4 w-4" />
+                      Pay ₹{member.dueAmount.toLocaleString()}
+                    </>
+                  )}
                 </Button>
               </div>
             </CardContent>
@@ -200,19 +287,19 @@ const MemberPayments = () => {
             <CardDescription>Your past payments and invoices</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="space-y-3">
               {paymentHistory.length > 0 ? (
                 paymentHistory.map((payment) => (
                   <div
                     key={payment.id}
-                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-lg bg-muted/30 gap-4"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl bg-muted/30 border border-border/30 gap-4 hover:bg-muted/50 transition-colors"
                   >
                     <div className="flex items-center gap-4">
                       <div className="p-2 rounded-lg bg-accent/20">
                         <IndianRupee className="h-5 w-5 text-accent" />
                       </div>
                       <div>
-                        <p className="font-medium text-foreground">
+                        <p className="font-semibold text-foreground">
                           ₹{payment.amount.toLocaleString()}
                         </p>
                         <p className="text-sm text-muted-foreground">
@@ -220,8 +307,15 @@ const MemberPayments = () => {
                             day: 'numeric',
                             month: 'short',
                             year: 'numeric',
-                          })} • {(payment as any).method || 'Cash'}
+                          })}
+                          {' • '}
+                          {(payment as any).method || 'Cash'}
                         </p>
+                        {(payment as any).razorpayPaymentId && (
+                          <p className="text-xs text-muted-foreground font-mono mt-0.5">
+                            Txn: {(payment as any).razorpayPaymentId}
+                          </p>
+                        )}
                       </div>
                     </div>
                     <div className="flex items-center gap-3 sm:ml-auto">
@@ -246,31 +340,44 @@ const MemberPayments = () => {
                   </div>
                 ))
               ) : (
-                <div className="text-center py-8 text-muted-foreground">
-                  No payment history found.
+                <div className="text-center py-12 text-muted-foreground">
+                  <Receipt className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                  <p>No payment history found.</p>
                 </div>
               )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Payment Methods Info */}
+        {/* Accepted Payment Methods */}
         <Card className="bg-gradient-card border-border/50">
           <CardHeader>
             <CardTitle className="text-foreground">Accepted Payment Methods</CardTitle>
-            <CardDescription>We accept multiple payment options</CardDescription>
+            <CardDescription>
+              Pay securely online via Razorpay or with cash at the counter
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {['UPI', 'Debit Card', 'Credit Card', 'Cash'].map((method) => (
+              {[
+                { label: 'UPI', sub: 'GPay, PhonePe, Paytm' },
+                { label: 'Debit Card', sub: 'Visa, Mastercard, RuPay' },
+                { label: 'Credit Card', sub: 'All major cards' },
+                { label: 'Cash', sub: 'At the counter' },
+              ].map((method) => (
                 <div
-                  key={method}
-                  className="p-4 rounded-lg bg-muted/30 text-center"
+                  key={method.label}
+                  className="p-4 rounded-xl bg-muted/30 text-center border border-border/30 hover:border-primary/30 transition-colors"
                 >
                   <CreditCard className="h-6 w-6 text-primary mx-auto mb-2" />
-                  <p className="text-sm font-medium text-foreground">{method}</p>
+                  <p className="text-sm font-semibold text-foreground">{method.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{method.sub}</p>
                 </div>
               ))}
+            </div>
+            <div className="mt-4 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+              <Shield className="h-3 w-3 text-accent" />
+              <span>All online payments are processed securely by <strong>Razorpay</strong> — PCI-DSS compliant.</span>
             </div>
           </CardContent>
         </Card>

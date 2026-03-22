@@ -3,6 +3,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import { Member, MembershipPlan } from '@/lib/types';
 import {
   Search,
@@ -16,6 +17,9 @@ import {
   CreditCard,
   Receipt,
   RefreshCw,
+  SplitSquareHorizontal,
+  Loader2,
+  Wallet,
 } from 'lucide-react';
 import {
   Select,
@@ -37,6 +41,12 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -54,8 +64,10 @@ interface PaymentRecord {
   razorpayPaymentId?: string;
 }
 
+type MemberWithPlan = Member & { plan?: MembershipPlan; paymentStatus: string };
+
 const Payments = () => {
-  const [members, setMembers] = useState<(Member & { plan?: MembershipPlan, paymentStatus: string })[]>([]);
+  const [members, setMembers] = useState<MemberWithPlan[]>([]);
   const [plans, setPlans] = useState<MembershipPlan[]>([]);
   const [allPayments, setAllPayments] = useState<PaymentRecord[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -64,6 +76,13 @@ const Payments = () => {
   const [methodFilter, setMethodFilter] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+
+  // ── Partial Payment Dialog state ───────────────────────────────────────────
+  const [payDialogOpen, setPayDialogOpen] = useState(false);
+  const [selectedMember, setSelectedMember] = useState<MemberWithPlan | null>(null);
+  const [customAmount, setCustomAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [isSaving, setIsSaving] = useState(false);
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -109,43 +128,67 @@ const Payments = () => {
       (p.razorpayPaymentId || '').toLowerCase().includes(historySearch.toLowerCase());
     const matchesMethod = methodFilter === 'all' ||
       (methodFilter === 'online' && (p.method || '').toLowerCase().includes('razorpay')) ||
-      (methodFilter === 'cash' && (p.method || '').toLowerCase() === 'cash');
+      (methodFilter === 'cash' && (p.method || '').toLowerCase() === 'cash') ||
+      (methodFilter === 'upi' && (p.method || '').toLowerCase() === 'upi');
     return matchesSearch && matchesMethod;
   });
 
   const totalPending = members.filter(m => m.paymentStatus === 'pending')
     .reduce((sum, m) => sum + m.dueAmount, 0);
-
-  const totalCollected = allPayments
-    .filter(p => p.status === 'paid')
+  const totalCollected = allPayments.filter(p => p.status === 'paid')
     .reduce((sum, p) => sum + p.amount, 0);
-
   const onlinePayments = allPayments.filter(p => (p.method || '').toLowerCase().includes('razorpay'));
-  const cashPayments = allPayments.filter(p => (p.method || '').toLowerCase() === 'cash');
-
-  const handleCollectPayment = async (member: Member & { plan?: MembershipPlan }) => {
-    try {
-      await api.post('/payments', {
-        memberId: member.id,
-        amount: member.dueAmount,
-        planId: member.planId,
-        method: 'Cash',
-      });
-
-      toast({
-        title: 'Cash Payment Collected',
-        description: `₹${member.dueAmount.toLocaleString()} recorded for ${member.name}.`,
-      });
-
-      fetchData();
-    } catch (error: any) {
-      toast({ title: 'Error', description: error.message || 'Failed to collect payment', variant: 'destructive' });
-    }
-  };
+  const cashPayments = allPayments.filter(p => !['razorpay', 'upi'].some(x => (p.method || '').toLowerCase().includes(x)));
 
   const getMemberName = (memberId: string) => {
     const member = members.find(m => m.id === memberId);
     return member?.name || 'Unknown Member';
+  };
+
+  // ── Open collection dialog ──────────────────────────────────────────────────
+  const openPayDialog = (member: MemberWithPlan) => {
+    setSelectedMember(member);
+    setCustomAmount(String(member.dueAmount)); // prefill with full due amount
+    setPaymentMethod('Cash');
+    setPayDialogOpen(true);
+  };
+
+  // ── Submit partial payment ──────────────────────────────────────────────────
+  const handleCollectPayment = async () => {
+    if (!selectedMember) return;
+    const amount = parseFloat(customAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast({ title: 'Invalid amount', description: 'Please enter a valid amount greater than 0.', variant: 'destructive' });
+      return;
+    }
+    if (amount > selectedMember.dueAmount) {
+      toast({ title: 'Amount too high', description: `Maximum collectable is ₹${selectedMember.dueAmount.toLocaleString()}.`, variant: 'destructive' });
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await api.post('/payments/partial', {
+        memberId: selectedMember.id,
+        planId: selectedMember.planId,
+        paidAmount: amount,
+        method: paymentMethod,
+      });
+
+      const remaining = selectedMember.dueAmount - amount;
+      toast({
+        title: `₹${amount.toLocaleString()} Collected ✅`,
+        description: remaining > 0
+          ? `₹${remaining.toLocaleString()} remaining balance recorded as due.`
+          : 'Full payment received. Member balance is clear.',
+      });
+      setPayDialogOpen(false);
+      fetchData();
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to record payment', variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -280,7 +323,7 @@ const Payments = () => {
                         <tr className="border-b border-border/50 bg-muted/20">
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">Member</th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">Plan</th>
-                          <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">Amount Due</th>
+                          <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">Total Due</th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">Expiry</th>
                           <th className="text-left py-4 px-6 text-sm font-medium text-muted-foreground">Status</th>
                           <th className="text-right py-4 px-6 text-sm font-medium text-muted-foreground">Action</th>
@@ -301,8 +344,12 @@ const Payments = () => {
                               </div>
                             </td>
                             <td className="py-4 px-6 text-foreground text-sm">{member.plan?.name || '—'}</td>
-                            <td className="py-4 px-6 font-medium text-foreground">
-                              {member.dueAmount > 0 ? `₹${member.dueAmount.toLocaleString()}` : '—'}
+                            <td className="py-4 px-6">
+                              {member.dueAmount > 0 ? (
+                                <span className="font-semibold text-warning">₹{member.dueAmount.toLocaleString()}</span>
+                              ) : (
+                                <span className="text-accent font-medium">No dues</span>
+                              )}
                             </td>
                             <td className="py-4 px-6">
                               <div className="flex items-center gap-2 text-muted-foreground text-sm">
@@ -321,8 +368,14 @@ const Payments = () => {
                             </td>
                             <td className="py-4 px-6 text-right">
                               {member.paymentStatus === 'pending' && (
-                                <Button variant="hero" size="sm" onClick={() => handleCollectPayment(member)} className="gap-2">
-                                  <IndianRupee className="h-4 w-4" />Collect Cash
+                                <Button
+                                  variant="hero"
+                                  size="sm"
+                                  onClick={() => openPayDialog(member)}
+                                  className="gap-2"
+                                >
+                                  <Wallet className="h-4 w-4" />
+                                  Collect
                                 </Button>
                               )}
                             </td>
@@ -364,13 +417,16 @@ const Payments = () => {
                           <p className="font-medium">{member.plan?.name || '—'}</p>
                         </div>
                         <div>
-                          <span className="text-xs text-muted-foreground">Amount Due</span>
-                          <p className="font-medium">{member.dueAmount > 0 ? `₹${member.dueAmount.toLocaleString()}` : '—'}</p>
+                          <span className="text-xs text-muted-foreground">Total Due</span>
+                          <p className={`font-semibold ${member.dueAmount > 0 ? 'text-warning' : 'text-accent'}`}>
+                            {member.dueAmount > 0 ? `₹${member.dueAmount.toLocaleString()}` : 'No dues'}
+                          </p>
                         </div>
                       </div>
                       {member.paymentStatus === 'pending' && (
-                        <Button variant="hero" size="sm" className="w-full gap-2" onClick={() => handleCollectPayment(member)}>
-                          <IndianRupee className="h-4 w-4" />Collect Cash
+                        <Button variant="hero" size="sm" className="w-full gap-2" onClick={() => openPayDialog(member)}>
+                          <Wallet className="h-4 w-4" />
+                          Collect Payment
                         </Button>
                       )}
                     </div>
@@ -403,6 +459,7 @@ const Payments = () => {
                 <SelectContent>
                   <SelectItem value="all">All Methods</SelectItem>
                   <SelectItem value="online">Online (Razorpay)</SelectItem>
+                  <SelectItem value="upi">UPI</SelectItem>
                   <SelectItem value="cash">Cash</SelectItem>
                 </SelectContent>
               </Select>
@@ -427,6 +484,7 @@ const Payments = () => {
                   <div className="space-y-3">
                     {filteredPayments.map((payment) => {
                       const isOnline = (payment.method || '').toLowerCase().includes('razorpay');
+                      const isPartial = payment.status === 'pending';
                       return (
                         <div
                           key={payment.id}
@@ -435,11 +493,13 @@ const Payments = () => {
                           <div className="flex items-start gap-3">
                             <div className={cn(
                               "p-2 rounded-lg flex-shrink-0",
-                              isOnline ? "bg-primary/20" : "bg-muted/40"
+                              isOnline ? "bg-primary/20" : isPartial ? "bg-warning/10" : "bg-muted/40"
                             )}>
                               {isOnline
                                 ? <CreditCard className="h-5 w-5 text-primary" />
-                                : <IndianRupee className="h-5 w-5 text-muted-foreground" />
+                                : isPartial
+                                  ? <SplitSquareHorizontal className="h-5 w-5 text-warning" />
+                                  : <IndianRupee className="h-5 w-5 text-muted-foreground" />
                               }
                             </div>
                             <div className="min-w-0">
@@ -453,8 +513,13 @@ const Payments = () => {
                                     ? "bg-primary/20 text-primary border-primary/30"
                                     : "bg-muted/60 text-muted-foreground border-border/50"
                                 )}>
-                                  {isOnline ? '⚡ Online' : 'Cash'}
+                                  {isOnline ? '⚡ Online' : payment.method || 'Cash'}
                                 </Badge>
+                                {isPartial && (
+                                  <Badge className="text-xs bg-warning/20 text-warning border-warning/30">
+                                    Partial
+                                  </Badge>
+                                )}
                               </div>
                               <p className="text-sm text-muted-foreground">
                                 {new Date(payment.date).toLocaleDateString('en-IN', {
@@ -480,7 +545,7 @@ const Payments = () => {
                                   ? 'bg-accent/20 text-accent border-accent/30'
                                   : 'bg-warning/20 text-warning border-warning/30'
                               )}>
-                                {payment.status.toUpperCase()}
+                                {payment.status === 'paid' ? 'PAID' : 'PARTIAL'}
                               </Badge>
                             </div>
                           </div>
@@ -498,6 +563,153 @@ const Payments = () => {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* ── Collect Payment Dialog ── */}
+        <Dialog open={payDialogOpen} onOpenChange={(open) => {
+          setPayDialogOpen(open);
+          if (!open) setSelectedMember(null);
+        }}>
+          <DialogContent className="sm:max-w-md bg-card border-border">
+            <DialogHeader>
+              <DialogTitle className="font-display text-2xl">
+                COLLECT <span className="text-gradient-primary">PAYMENT</span>
+              </DialogTitle>
+            </DialogHeader>
+
+            {selectedMember && (
+              <div className="space-y-5 mt-2">
+                {/* Member info summary */}
+                <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center">
+                      <span className="text-primary font-bold">{selectedMember.name.charAt(0)}</span>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-foreground">{selectedMember.name}</p>
+                      <p className="text-xs text-muted-foreground">{selectedMember.plan?.name || 'N/A'}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div className="p-2.5 rounded-lg bg-warning/10 border border-warning/20">
+                      <p className="text-xs text-warning/70 font-medium uppercase tracking-wider mb-0.5">Total Due</p>
+                      <p className="font-bold text-warning text-lg">₹{selectedMember.dueAmount.toLocaleString()}</p>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-accent/10 border border-accent/20">
+                      <p className="text-xs text-accent/70 font-medium uppercase tracking-wider mb-0.5">Total Paid</p>
+                      <p className="font-bold text-accent text-lg">₹{selectedMember.paidAmount.toLocaleString()}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Amount input */}
+                <div className="space-y-2">
+                  <Label htmlFor="amount">
+                    Amount Collecting Now (₹)
+                    <span className="text-xs text-muted-foreground ml-2">
+                      — enter any amount ≤ ₹{selectedMember.dueAmount.toLocaleString()}
+                    </span>
+                  </Label>
+                  <div className="relative">
+                    <IndianRupee className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="amount"
+                      type="number"
+                      min={1}
+                      max={selectedMember.dueAmount}
+                      step={0.01}
+                      value={customAmount}
+                      onChange={(e) => setCustomAmount(e.target.value)}
+                      className="pl-9 text-lg font-bold"
+                      placeholder="0"
+                    />
+                  </div>
+
+                  {/* Live balance preview */}
+                  {customAmount && !isNaN(parseFloat(customAmount)) && (
+                    <div className={cn(
+                      "p-3 rounded-lg border text-sm flex items-center gap-2",
+                      parseFloat(customAmount) >= selectedMember.dueAmount
+                        ? "bg-accent/10 border-accent/30 text-accent"
+                        : "bg-warning/10 border-warning/30 text-warning"
+                    )}>
+                      {parseFloat(customAmount) >= selectedMember.dueAmount ? (
+                        <>
+                          <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                          <span>Full payment — balance will be cleared ✓</span>
+                        </>
+                      ) : (
+                        <>
+                          <SplitSquareHorizontal className="h-4 w-4 flex-shrink-0" />
+                          <span>
+                            Partial payment — <strong>₹{Math.max(0, selectedMember.dueAmount - parseFloat(customAmount)).toLocaleString()}</strong> will remain as due
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Payment method */}
+                <div className="space-y-2">
+                  <Label>Payment Method</Label>
+                  <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Cash">💵 Cash</SelectItem>
+                      <SelectItem value="UPI">📱 UPI</SelectItem>
+                      <SelectItem value="Card">💳 Card</SelectItem>
+                      <SelectItem value="Bank Transfer">🏦 Bank Transfer</SelectItem>
+                      <SelectItem value="Cheque">📋 Cheque</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Quick fill buttons */}
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 text-xs"
+                    onClick={() => setCustomAmount(String(selectedMember.dueAmount))}
+                  >
+                    Full Amount (₹{selectedMember.dueAmount.toLocaleString()})
+                  </Button>
+                  {selectedMember.dueAmount > 500 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="flex-1 text-xs"
+                      onClick={() => setCustomAmount(String(Math.floor(selectedMember.dueAmount / 2)))}
+                    >
+                      Half (₹{Math.floor(selectedMember.dueAmount / 2).toLocaleString()})
+                    </Button>
+                  )}
+                </div>
+
+                {/* Submit */}
+                <div className="flex gap-3 pt-2">
+                  <Button type="button" variant="outline" className="flex-1" onClick={() => setPayDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="hero"
+                    className="flex-1 gap-2"
+                    onClick={handleCollectPayment}
+                    disabled={isSaving || !customAmount || parseFloat(customAmount) <= 0}
+                  >
+                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <IndianRupee className="h-4 w-4" />}
+                    Collect ₹{customAmount ? parseFloat(customAmount).toLocaleString() : '—'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

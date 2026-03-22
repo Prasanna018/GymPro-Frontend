@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { compressImage } from '@/lib/imageCompress';
 import {
   Package,
   Plus,
@@ -70,6 +71,7 @@ const Store = () => {
   const [supplementMap, setSupplementMap] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSupplement, setEditingSupplement] = useState<Supplement | null>(null);
@@ -133,19 +135,31 @@ const Store = () => {
   // ─── Image Handlers ────────────────────────────────────────────────────────
   const totalImageCount = existingImages.length + newImageFiles.length;
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     const remaining = MAX_IMAGES - totalImageCount;
     if (files.length > remaining) {
       toast({ title: 'Limit Reached', description: `You can only add ${remaining} more image(s). Max is ${MAX_IMAGES}.`, variant: 'destructive' });
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
-    const newFiles = files.slice(0, remaining);
-    const previews = newFiles.map(f => URL.createObjectURL(f));
-    setNewImageFiles(prev => [...prev, ...newFiles]);
-    setNewImagePreviews(prev => [...prev, ...previews]);
-    // Reset input so same file can be re-selected
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    const selected = files.slice(0, remaining);
+    setIsCompressing(true);
+    toast({ title: '🗜️ Compressing images…', description: 'Optimising for upload, please wait.' });
+    try {
+      // Compress each image before adding to state
+      const compressed = await Promise.all(selected.map(f => compressImage(f)));
+      const previews = compressed.map(f => URL.createObjectURL(f));
+      setNewImageFiles(prev => [...prev, ...compressed]);
+      setNewImagePreviews(prev => [...prev, ...previews]);
+      toast({ title: '✅ Images ready', description: `${compressed.length} image(s) compressed and ready to upload.` });
+    } catch (err) {
+      toast({ title: 'Compression error', description: 'Could not process one or more images.', variant: 'destructive' });
+    } finally {
+      setIsCompressing(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   const removeExistingImage = (idx: number) => {
@@ -368,17 +382,30 @@ const Store = () => {
                         />
                         <label
                           htmlFor="image-upload"
-                          className="flex items-center justify-center gap-2 w-full border-2 border-dashed border-border/50 hover:border-primary/50 rounded-lg py-4 cursor-pointer transition-colors text-muted-foreground hover:text-primary"
+                          className={`flex items-center justify-center gap-2 w-full border-2 border-dashed rounded-lg py-4 cursor-pointer transition-colors ${
+                            isCompressing
+                              ? 'border-primary/50 text-primary cursor-wait'
+                              : 'border-border/50 hover:border-primary/50 text-muted-foreground hover:text-primary'
+                          }`}
                         >
-                          <ImagePlus className="h-5 w-5" />
-                          <span className="text-sm">
-                            Click to upload ({MAX_IMAGES - totalImageCount} slot{MAX_IMAGES - totalImageCount !== 1 ? 's' : ''} left)
-                          </span>
+                          {isCompressing ? (
+                            <>
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                              <span className="text-sm">Compressing images...</span>
+                            </>
+                          ) : (
+                            <>
+                              <ImagePlus className="h-5 w-5" />
+                              <span className="text-sm">
+                                Click to upload ({MAX_IMAGES - totalImageCount} slot{MAX_IMAGES - totalImageCount !== 1 ? 's' : ''} left)
+                              </span>
+                            </>
+                          )}
                         </label>
                       </div>
                     )}
                     <p className="text-xs text-muted-foreground">
-                      Max {MAX_IMAGES} images. JPG, PNG, WEBP supported. Images stored on Cloudinary.
+                      Max {MAX_IMAGES} images · Auto-compressed to ≤500 KB · JPG, PNG, WEBP supported
                     </p>
                   </div>
 
@@ -386,7 +413,7 @@ const Store = () => {
                     <Button type="button" variant="outline" className="flex-1" onClick={() => setIsDialogOpen(false)}>
                       Cancel
                     </Button>
-                    <Button type="submit" variant="hero" className="flex-1 gap-2" disabled={isSaving}>
+                    <Button type="submit" variant="hero" className="flex-1 gap-2" disabled={isSaving || isCompressing}>
                       {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                       {editingSupplement ? 'Update' : 'Add'} Supplement
                     </Button>

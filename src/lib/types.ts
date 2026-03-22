@@ -54,7 +54,7 @@ export interface Supplement {
   price: number;
   stock: number;
   category: string;
-  image?: string;
+  images?: string[];
 }
 
 export interface Order {

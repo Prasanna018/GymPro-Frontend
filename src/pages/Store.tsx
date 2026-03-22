@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { SupplementCard } from '@/components/store/SupplementCard';
 import { Supplement } from '@/lib/types';
@@ -15,6 +15,9 @@ import {
   CreditCard,
   Clock,
   CheckCircle,
+  ImagePlus,
+  X,
+  Loader2,
 } from 'lucide-react';
 import {
   Dialog,
@@ -40,6 +43,8 @@ import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
+const MAX_IMAGES = 4;
+
 interface StoreOrder {
   id: string;
   memberId: string;
@@ -64,10 +69,13 @@ const Store = () => {
   const [members, setMembers] = useState<Member[]>([]);
   const [supplementMap, setSupplementMap] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSupplement, setEditingSupplement] = useState<Supplement | null>(null);
   const { toast } = useToast();
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -76,6 +84,11 @@ const Store = () => {
     stock: '',
     category: '',
   });
+
+  // Image state: existing Cloudinary URLs (for edit) + new local File previews
+  const [existingImages, setExistingImages] = useState<string[]>([]); // already-uploaded URLs
+  const [newImageFiles, setNewImageFiles] = useState<File[]>([]);     // new files to upload
+  const [newImagePreviews, setNewImagePreviews] = useState<string[]>([]);
 
   useEffect(() => {
     fetchAll();
@@ -92,8 +105,6 @@ const Store = () => {
       setSupplements(supps);
       setOrders(ordersData);
       setMembers(membersData);
-
-      // Build supplement ID → name map
       const map: Record<string, string> = {};
       supps.forEach((s: Supplement) => { map[s.id] = s.name; });
       setSupplementMap(map);
@@ -119,17 +130,57 @@ const Store = () => {
     return m?.name || 'Unknown';
   };
 
+  // ─── Image Handlers ────────────────────────────────────────────────────────
+  const totalImageCount = existingImages.length + newImageFiles.length;
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    const remaining = MAX_IMAGES - totalImageCount;
+    if (files.length > remaining) {
+      toast({ title: 'Limit Reached', description: `You can only add ${remaining} more image(s). Max is ${MAX_IMAGES}.`, variant: 'destructive' });
+      return;
+    }
+    const newFiles = files.slice(0, remaining);
+    const previews = newFiles.map(f => URL.createObjectURL(f));
+    setNewImageFiles(prev => [...prev, ...newFiles]);
+    setNewImagePreviews(prev => [...prev, ...previews]);
+    // Reset input so same file can be re-selected
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const removeExistingImage = (idx: number) => {
+    setExistingImages(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const removeNewImage = (idx: number) => {
+    URL.revokeObjectURL(newImagePreviews[idx]);
+    setNewImageFiles(prev => prev.filter((_, i) => i !== idx));
+    setNewImagePreviews(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  // ─── Form Submit ───────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsSaving(true);
     try {
+      const fd = new FormData();
+      fd.append('name', formData.name);
+      fd.append('description', formData.description);
+      fd.append('price', formData.price);
+      fd.append('stock', formData.stock);
+      fd.append('category', formData.category);
+
+      // New image files
+      newImageFiles.forEach(file => fd.append('images', file));
+
       if (editingSupplement) {
-        const payload = { ...formData, price: Number(formData.price), stock: Number(formData.stock) };
-        const updated = await api.put(`/supplements/${editingSupplement.id}`, payload);
+        // For editing: also send the list of kept Cloudinary URLs
+        fd.append('existing_images', JSON.stringify(existingImages));
+        const updated = await api.putForm(`/supplements/${editingSupplement.id}`, fd);
         setSupplements(supplements.map(s => s.id === editingSupplement.id ? updated : s));
         toast({ title: 'Supplement Updated', description: `${formData.name} has been updated.` });
       } else {
-        const payload = { ...formData, price: Number(formData.price), stock: Number(formData.stock) };
-        const newSupplement = await api.post('/supplements', payload);
+        const newSupplement = await api.postForm('/supplements', fd);
         setSupplements([newSupplement, ...supplements]);
         toast({ title: 'Supplement Added', description: `${formData.name} has been added to the store.` });
       }
@@ -137,6 +188,8 @@ const Store = () => {
       setIsDialogOpen(false);
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to save supplement', variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -149,17 +202,23 @@ const Store = () => {
       stock: String(supplement.stock),
       category: supplement.category,
     });
+    setExistingImages(supplement.images || []);
+    setNewImageFiles([]);
+    setNewImagePreviews([]);
     setIsDialogOpen(true);
   };
 
   const resetForm = () => {
     setFormData({ name: '', description: '', price: '', stock: '', category: '' });
     setEditingSupplement(null);
+    newImagePreviews.forEach(url => URL.revokeObjectURL(url));
+    setExistingImages([]);
+    setNewImageFiles([]);
+    setNewImagePreviews([]);
   };
 
   const lowStockCount = supplements.filter(s => s.stock < 10 && s.stock > 0).length;
   const outOfStockCount = supplements.filter(s => s.stock === 0).length;
-
   const paidOrders = orders.filter(o => o.paymentStatus === 'paid');
   const pendingOrders = orders.filter(o => o.paymentStatus !== 'paid');
 
@@ -192,7 +251,7 @@ const Store = () => {
                   Add Supplement
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-md bg-card border-border">
+              <DialogContent className="sm:max-w-lg bg-card border-border max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle className="font-display text-2xl">
                     {editingSupplement ? 'EDIT' : 'ADD'} <span className="text-gradient-primary">SUPPLEMENT</span>
@@ -254,11 +313,81 @@ const Store = () => {
                       required
                     />
                   </div>
+
+                  {/* ── Image Upload Section ── */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label>Product Images</Label>
+                      <span className="text-xs text-muted-foreground">
+                        {totalImageCount}/{MAX_IMAGES} images
+                      </span>
+                    </div>
+
+                    {/* Preview grid */}
+                    {(existingImages.length > 0 || newImagePreviews.length > 0) && (
+                      <div className="grid grid-cols-4 gap-2">
+                        {existingImages.map((url, idx) => (
+                          <div key={`existing-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border border-border/50 group">
+                            <img src={url} alt="" className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => removeExistingImage(idx)}
+                              className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                        {newImagePreviews.map((preview, idx) => (
+                          <div key={`new-${idx}`} className="relative aspect-square rounded-lg overflow-hidden border border-primary/30 group">
+                            <img src={preview} alt="" className="w-full h-full object-cover" />
+                            <div className="absolute top-1 left-1 bg-primary/80 text-white text-xs px-1 rounded">New</div>
+                            <button
+                              type="button"
+                              onClick={() => removeNewImage(idx)}
+                              className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Upload button */}
+                    {totalImageCount < MAX_IMAGES && (
+                      <div>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/*"
+                          multiple
+                          className="hidden"
+                          onChange={handleImageSelect}
+                          id="image-upload"
+                        />
+                        <label
+                          htmlFor="image-upload"
+                          className="flex items-center justify-center gap-2 w-full border-2 border-dashed border-border/50 hover:border-primary/50 rounded-lg py-4 cursor-pointer transition-colors text-muted-foreground hover:text-primary"
+                        >
+                          <ImagePlus className="h-5 w-5" />
+                          <span className="text-sm">
+                            Click to upload ({MAX_IMAGES - totalImageCount} slot{MAX_IMAGES - totalImageCount !== 1 ? 's' : ''} left)
+                          </span>
+                        </label>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">
+                      Max {MAX_IMAGES} images. JPG, PNG, WEBP supported. Images stored on Cloudinary.
+                    </p>
+                  </div>
+
                   <div className="flex gap-3 pt-4">
                     <Button type="button" variant="outline" className="flex-1" onClick={() => setIsDialogOpen(false)}>
                       Cancel
                     </Button>
-                    <Button type="submit" variant="hero" className="flex-1">
+                    <Button type="submit" variant="hero" className="flex-1 gap-2" disabled={isSaving}>
+                      {isSaving && <Loader2 className="h-4 w-4 animate-spin" />}
                       {editingSupplement ? 'Update' : 'Add'} Supplement
                     </Button>
                   </div>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Supplement } from '@/lib/types';
 import { Button } from '@/components/ui/button';
@@ -15,6 +15,8 @@ import {
   IndianRupee,
   Loader2,
   Shield,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { api } from '@/lib/api';
@@ -36,12 +38,124 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { openRazorpayCheckout } from '@/lib/razorpay';
+import { cn } from '@/lib/utils';
 
 interface CartItem {
   supplement: Supplement;
   quantity: number;
 }
 
+// ─── Image Slider Component ───────────────────────────────────────────────────
+interface ProductImageSliderProps {
+  images: string[];
+  name: string;
+}
+
+const ProductImageSlider = ({ images, name }: ProductImageSliderProps) => {
+  const [current, setCurrent] = useState(0);
+  const showSlider = images.length > 2;
+
+  const prev = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrent(i => (i === 0 ? images.length - 1 : i - 1));
+  }, [images.length]);
+
+  const next = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCurrent(i => (i === images.length - 1 ? 0 : i + 1));
+  }, [images.length]);
+
+  if (images.length === 0) {
+    return (
+      <div className="aspect-[4/3] relative bg-muted/30 flex items-center justify-center overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-t from-card/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10" />
+        <ShoppingBag className="h-24 w-24 text-primary/10 group-hover:text-primary/20 group-hover:scale-110 transition-all duration-500" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="aspect-[4/3] relative bg-muted/30 overflow-hidden">
+      {/* Slides */}
+      <div
+        className="flex h-full transition-transform duration-500 ease-in-out"
+        style={{ transform: `translateX(-${current * 100}%)` }}
+      >
+        {images.map((url, idx) => (
+          <img
+            key={idx}
+            src={url}
+            alt={`${name} - ${idx + 1}`}
+            className="w-full h-full object-cover flex-shrink-0"
+            draggable={false}
+          />
+        ))}
+      </div>
+
+      {/* Gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-card/70 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none" />
+
+      {/* Controls — only show if more than 2 images */}
+      {showSlider && (
+        <>
+          <button
+            onClick={prev}
+            className="absolute left-2 top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/70 text-white rounded-full p-1.5 transition-all opacity-0 group-hover:opacity-100 shadow-lg"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            onClick={next}
+            className="absolute right-2 top-1/2 -translate-y-1/2 z-20 bg-black/50 hover:bg-black/70 text-white rounded-full p-1.5 transition-all opacity-0 group-hover:opacity-100 shadow-lg"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+
+          {/* Dot indicators */}
+          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
+            {images.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={(e) => { e.stopPropagation(); setCurrent(idx); }}
+                className={cn(
+                  'rounded-full transition-all duration-300 shadow-sm',
+                  idx === current
+                    ? 'w-5 h-2.5 bg-white'
+                    : 'w-2.5 h-2.5 bg-white/50 hover:bg-white/80'
+                )}
+              />
+            ))}
+          </div>
+
+          {/* Image count badge */}
+          <div className="absolute top-3 left-3 z-20 bg-black/50 text-white text-xs px-2 py-1 rounded-full backdrop-blur-sm">
+            {current + 1} / {images.length}
+          </div>
+        </>
+      )}
+
+      {/* If exactly 1 or 2 images, just show dots for navigation without prev/next */}
+      {!showSlider && images.length > 1 && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 flex gap-1.5">
+          {images.map((_, idx) => (
+            <button
+              key={idx}
+              onClick={(e) => { e.stopPropagation(); setCurrent(idx); }}
+              className={cn(
+                'rounded-full transition-all duration-300 shadow-sm',
+                idx === current
+                  ? 'w-5 h-2.5 bg-white'
+                  : 'w-2.5 h-2.5 bg-white/50 hover:bg-white/80'
+              )}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 const MemberStore = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -105,10 +219,7 @@ const MemberStore = () => {
       }
       return [...prev, { supplement, quantity: 1 }];
     });
-    toast({
-      title: 'Added to Cart',
-      description: `${supplement.name} added to your cart.`,
-    });
+    toast({ title: 'Added to Cart', description: `${supplement.name} added to your cart.` });
   };
 
   const updateQuantity = (supplementId: string, delta: number) => {
@@ -135,7 +246,6 @@ const MemberStore = () => {
     setIsCheckingOut(true);
 
     try {
-      // Step 1: Create Razorpay order (validates stock server-side)
       const payload = {
         items: cart.map(c => ({
           supplementId: c.supplement.id,
@@ -146,7 +256,6 @@ const MemberStore = () => {
 
       const orderData = await api.post('/razorpay/create-store-order', payload);
 
-      // Step 2: Open Razorpay checkout
       await openRazorpayCheckout({
         keyId: orderData.keyId,
         orderId: orderData.razorpayOrderId,
@@ -158,7 +267,6 @@ const MemberStore = () => {
         prefillEmail: orderData.memberEmail,
         onSuccess: async (response) => {
           try {
-            // Step 3: Verify payment and fulfill order
             await api.post('/razorpay/verify-store-payment', {
               razorpayOrderId: response.razorpay_order_id,
               razorpayPaymentId: response.razorpay_payment_id,
@@ -178,7 +286,7 @@ const MemberStore = () => {
 
             setCart([]);
             setIsCartOpen(false);
-            await fetchSupplements(); // Refresh stock
+            await fetchSupplements();
           } catch (verifyError: any) {
             toast({
               title: 'Order Verification Failed',
@@ -217,7 +325,7 @@ const MemberStore = () => {
               {gymSettings?.gymName || 'GYM'} <span className="text-gradient-primary">STORE</span>
             </h1>
             <p className="text-muted-foreground mt-1">
-              Premium vitamins & supplements from your gym's official catalog.
+              Premium vitamins &amp; supplements from your gym's official catalog.
             </p>
           </div>
 
@@ -244,49 +352,55 @@ const MemberStore = () => {
 
               <div className="flex-1 overflow-y-auto p-6 space-y-4">
                 {cart.length > 0 ? (
-                  cart.map((item) => (
-                    <div key={item.supplement.id} className="flex items-center gap-4 p-4 rounded-xl bg-card border border-border/50 shadow-sm hover:shadow-md transition-all group">
-                      <div className="h-14 w-14 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                        <ShoppingBag className="h-7 w-7 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-foreground truncate">{item.supplement.name}</h4>
-                        <p className="text-primary font-bold">₹{item.supplement.price.toLocaleString()}</p>
-                        <div className="flex items-center gap-3 mt-2">
-                          <div className="flex items-center border border-border/50 rounded-lg bg-background p-1">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 rounded-md"
-                              onClick={() => updateQuantity(item.supplement.id, -1)}
-                            >
-                              <Minus className="h-3 w-3" />
-                            </Button>
-                            <span className="w-8 text-center text-sm font-bold">{item.quantity}</span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 rounded-md"
-                              onClick={() => updateQuantity(item.supplement.id, 1)}
-                            >
-                              <Plus className="h-3 w-3" />
-                            </Button>
-                          </div>
-                          <span className="text-sm text-muted-foreground">
-                            = ₹{(item.supplement.price * item.quantity).toLocaleString()}
-                          </span>
+                  cart.map((item) => {
+                    const thumb = item.supplement.images?.[0];
+                    return (
+                      <div key={item.supplement.id} className="flex items-center gap-4 p-4 rounded-xl bg-card border border-border/50 shadow-sm hover:shadow-md transition-all group">
+                        <div className="h-14 w-14 rounded-lg overflow-hidden bg-primary/10 flex-shrink-0">
+                          {thumb
+                            ? <img src={thumb} alt={item.supplement.name} className="w-full h-full object-cover" />
+                            : <ShoppingBag className="h-7 w-7 text-primary m-auto mt-3.5" />
+                          }
                         </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-foreground truncate">{item.supplement.name}</h4>
+                          <p className="text-primary font-bold">₹{item.supplement.price.toLocaleString()}</p>
+                          <div className="flex items-center gap-3 mt-2">
+                            <div className="flex items-center border border-border/50 rounded-lg bg-background p-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-md"
+                                onClick={() => updateQuantity(item.supplement.id, -1)}
+                              >
+                                <Minus className="h-3 w-3" />
+                              </Button>
+                              <span className="w-8 text-center text-sm font-bold">{item.quantity}</span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 rounded-md"
+                                onClick={() => updateQuantity(item.supplement.id, 1)}
+                              >
+                                <Plus className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            <span className="text-sm text-muted-foreground">
+                              = ₹{(item.supplement.price * item.quantity).toLocaleString()}
+                            </span>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          onClick={() => removeFromCart(item.supplement.id)}
+                        >
+                          <X className="h-5 w-5" />
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                        onClick={() => removeFromCart(item.supplement.id)}
-                      >
-                        <X className="h-5 w-5" />
-                      </Button>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-4 opacity-50">
                     <ShoppingCart className="h-16 w-16" />
@@ -369,61 +483,65 @@ const MemberStore = () => {
               <Card key={i} className="animate-pulse bg-muted/20 border-border/50 h-[400px] rounded-2xl" />
             ))
           ) : filteredSupplements.length > 0 ? (
-            filteredSupplements.map((product) => (
-              <Card key={product.id} className="group overflow-hidden bg-gradient-card border-border/50 hover:border-primary/30 transition-all duration-300 rounded-2xl flex flex-col h-full shadow-sm hover:shadow-xl">
-                <div className="aspect-[4/3] relative bg-muted/30 flex items-center justify-center overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-t from-card/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity z-10" />
-                  <ShoppingBag className="h-24 w-24 text-primary/10 group-hover:text-primary/20 group-hover:scale-110 transition-all duration-500" />
-                  <Badge className="absolute top-4 right-4 bg-primary/20 text-primary border-primary/30 backdrop-blur-md z-20">
-                    {product.category}
-                  </Badge>
-                </div>
-                <CardHeader className="p-6 pb-2">
-                  <div className="flex justify-between items-start gap-2">
-                    <CardTitle className="text-xl text-foreground group-hover:text-primary transition-colors line-clamp-1">
-                      {product.name}
-                    </CardTitle>
+            filteredSupplements.map((product) => {
+              const images = product.images || [];
+              return (
+                <Card key={product.id} className="group overflow-hidden bg-gradient-card border-border/50 hover:border-primary/30 transition-all duration-300 rounded-2xl flex flex-col h-full shadow-sm hover:shadow-xl">
+                  {/* Image slider area */}
+                  <div className="relative">
+                    <ProductImageSlider images={images} name={product.name} />
+                    <Badge className="absolute top-4 right-4 bg-primary/20 text-primary border-primary/30 backdrop-blur-md z-20">
+                      {product.category}
+                    </Badge>
                   </div>
-                  <CardDescription className="line-clamp-2 h-10 mt-1">
-                    {product.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-6 pt-0 flex-1">
-                  <div className="flex items-center justify-between mt-4">
-                    <div className="flex flex-col">
-                      <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Member Price</span>
-                      <span className="text-2xl font-bold text-primary flex items-center">
-                        <IndianRupee className="h-5 w-5" />
-                        {product.price.toLocaleString()}
-                      </span>
+
+                  <CardHeader className="p-6 pb-2">
+                    <div className="flex justify-between items-start gap-2">
+                      <CardTitle className="text-xl text-foreground group-hover:text-primary transition-colors line-clamp-1">
+                        {product.name}
+                      </CardTitle>
                     </div>
-                    <div className="flex flex-col items-end">
-                      <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Stock</span>
-                      <span className={`text-sm font-medium ${product.stock > 10 ? 'text-accent' : product.stock > 0 ? 'text-warning' : 'text-destructive'}`}>
-                        {product.stock > 0 ? `${product.stock} left` : 'Out of stock'}
-                      </span>
+                    <CardDescription className="line-clamp-2 h-10 mt-1">
+                      {product.description}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-6 pt-0 flex-1">
+                    <div className="flex items-center justify-between mt-4">
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Member Price</span>
+                        <span className="text-2xl font-bold text-primary flex items-center">
+                          <IndianRupee className="h-5 w-5" />
+                          {product.price.toLocaleString()}
+                        </span>
+                      </div>
+                      <div className="flex flex-col items-end">
+                        <span className="text-xs text-muted-foreground uppercase font-bold tracking-wider">Stock</span>
+                        <span className={`text-sm font-medium ${product.stock > 10 ? 'text-accent' : product.stock > 0 ? 'text-warning' : 'text-destructive'}`}>
+                          {product.stock > 0 ? `${product.stock} left` : 'Out of stock'}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                </CardContent>
-                <CardFooter className="p-6 pt-0">
-                  <Button
-                    variant={product.stock > 0 ? "hero" : "secondary"}
-                    className="w-full h-12 gap-2 text-base rounded-xl"
-                    disabled={product.stock <= 0}
-                    onClick={() => addToCart(product)}
-                  >
-                    {product.stock > 0 ? (
-                      <>
-                        <Plus className="h-5 w-5" />
-                        Add to Cart
-                      </>
-                    ) : (
-                      'Out of Stock'
-                    )}
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))
+                  </CardContent>
+                  <CardFooter className="p-6 pt-0">
+                    <Button
+                      variant={product.stock > 0 ? "hero" : "secondary"}
+                      className="w-full h-12 gap-2 text-base rounded-xl"
+                      disabled={product.stock <= 0}
+                      onClick={() => addToCart(product)}
+                    >
+                      {product.stock > 0 ? (
+                        <>
+                          <Plus className="h-5 w-5" />
+                          Add to Cart
+                        </>
+                      ) : (
+                        'Out of Stock'
+                      )}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              );
+            })
           ) : (
             <div className="col-span-full py-20 text-center space-y-4">
               <ShoppingBag className="h-16 w-16 text-muted-foreground/20 mx-auto" />

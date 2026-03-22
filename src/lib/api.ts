@@ -122,4 +122,47 @@ export const api = {
         }
         return keysToCamel(await response.json());
     },
+
+    // Multipart form submission (for file uploads)
+    postForm: async (endpoint: string, formData: FormData) => {
+        const token = localStorage.getItem('gympro_token');
+        const headers: Record<string, string> = {};
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+        // Do NOT set Content-Type — browser will set it with correct boundary
+
+        const response = await fetch(`${API_URL}${endpoint}`, {
+            method: 'POST',
+            headers,
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => null);
+            throw new Error(errorData?.detail || `API error: ${response.statusText}`);
+        }
+        return keysToCamel(await response.json());
+    },
+
+    putForm: async (endpoint: string, formData: FormData) => {
+        const token = localStorage.getItem('gympro_token');
+        const headers: Record<string, string> = {};
+        if (token) {
+            headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        const response = await fetch(`${API_URL}${endpoint}`, {
+            method: 'PUT',
+            headers,
+            body: formData,
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json().catch(() => null);
+            throw new Error(errorData?.detail || `API error: ${response.statusText}`);
+        }
+        return keysToCamel(await response.json());
+    },
 };
+

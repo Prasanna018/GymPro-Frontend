@@ -188,17 +188,24 @@ const MemberPayments = () => {
                 <div>
                   <p className="text-sm text-muted-foreground">Payment Status</p>
                   <p className="text-xl font-bold text-foreground">
-                    {paymentStatus === 'paid' ? 'All Clear' : 'Payment Due'}
+                    {paymentStatus === 'paid' ? 'All Clear' : 'Balance Due'}
                   </p>
-                  <Badge
-                    className={
-                      paymentStatus === 'paid'
-                        ? 'bg-accent/20 text-accent border-accent/30'
-                        : 'bg-warning/20 text-warning border-warning/30'
-                    }
-                  >
-                    {paymentStatus === 'paid' ? 'Paid' : `₹${member.dueAmount.toLocaleString()} Due`}
-                  </Badge>
+                  <div className="flex flex-col gap-1 mt-1">
+                    <Badge
+                      className={
+                        paymentStatus === 'paid'
+                          ? 'bg-accent/20 text-accent border-accent/30 w-fit'
+                          : 'bg-warning/20 text-warning border-warning/30 w-fit'
+                      }
+                    >
+                      {paymentStatus === 'paid' ? 'Paid' : `₹${member.dueAmount.toLocaleString()} Due`}
+                    </Badge>
+                    {member.paidAmount > 0 && (
+                       <span className="text-xs text-muted-foreground">
+                         Total Paid: ₹{member.paidAmount.toLocaleString()}
+                       </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -320,10 +327,10 @@ const MemberPayments = () => {
                     </div>
                     <div className="flex items-center gap-3 sm:ml-auto">
                       <Badge className={cn(
-                        "border",
+                        "border text-xs",
                         payment.status === 'paid' ? 'bg-accent/20 text-accent border-accent/30' : 'bg-warning/20 text-warning border-warning/30'
                       )}>
-                        {payment.status.toUpperCase()}
+                        {payment.status === 'paid' ? 'PAID' : 'PARTIAL'}
                       </Badge>
                       {(payment as any).invoiceId && (
                         <Button

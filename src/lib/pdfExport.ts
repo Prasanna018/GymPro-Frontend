@@ -103,13 +103,14 @@ export function exportCompletePDF(data: {
     membershipData: any[];
     attendanceData: any[];
     productSalesData: any[];
-}) {
+}, startDate?: string, endDate?: string) {
     const { stats, revenueData, membershipData, attendanceData, productSalesData } = data;
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = doc.internal.pageSize.getWidth();
     const month = new Date().toLocaleString('default', { month: 'long', year: 'numeric' });
+    const dateStr = (startDate && endDate) ? `${startDate} to ${endDate}` : month;
 
-    addHeader(doc, 'Complete Analytics Report', `${month} | GymPro Business Analytics`);
+    addHeader(doc, 'Complete Analytics Report', `${dateStr} | GymPro Business Analytics`);
 
     // ── Summary stat boxes ──────────────────────────────────────────────────
     let y = 46;
@@ -221,11 +222,12 @@ export function exportCompletePDF(data: {
 // ═══════════════════════════════════════════════════════════════════════════
 // EXPORT: Revenue Report
 // ═══════════════════════════════════════════════════════════════════════════
-export function exportRevenuePDF(revenueData: any[], stats: any) {
+export function exportRevenuePDF(revenueData: any[], stats: any, startDate?: string, endDate?: string) {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = doc.internal.pageSize.getWidth();
+    const subtitle = (startDate && endDate) ? `Income analytics from ${startDate} to ${endDate}` : 'Last 6 months of income analytics';
 
-    addHeader(doc, 'Revenue Report', 'Last 6 months of income analytics');
+    addHeader(doc, 'Revenue Report', subtitle);
 
     let y = 46;
     const boxW = (W - 28 - 6) / 3;
@@ -265,11 +267,12 @@ export function exportRevenuePDF(revenueData: any[], stats: any) {
 // ═══════════════════════════════════════════════════════════════════════════
 // EXPORT: Membership Report
 // ═══════════════════════════════════════════════════════════════════════════
-export function exportMembershipPDF(membershipData: any[], stats: any) {
+export function exportMembershipPDF(membershipData: any[], stats: any, startDate?: string, endDate?: string) {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = doc.internal.pageSize.getWidth();
+    const subtitle = (startDate && endDate) ? `Distribution of members from ${startDate} to ${endDate}` : 'Distribution of members by plan';
 
-    addHeader(doc, 'Membership Report', 'Distribution of members by plan');
+    addHeader(doc, 'Membership Report', subtitle);
 
     let y = 46;
     const boxW = (W - 28 - 6) / 3;
@@ -306,11 +309,12 @@ export function exportMembershipPDF(membershipData: any[], stats: any) {
 // ═══════════════════════════════════════════════════════════════════════════
 // EXPORT: Attendance Report
 // ═══════════════════════════════════════════════════════════════════════════
-export function exportAttendancePDF(attendanceData: any[]) {
+export function exportAttendancePDF(attendanceData: any[], startDate?: string, endDate?: string) {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = doc.internal.pageSize.getWidth();
+    const subtitle = (startDate && endDate) ? `Check-in trends from ${startDate} to ${endDate}` : 'Weekly check-in trend';
 
-    addHeader(doc, 'Attendance Report', 'Weekly check-in trend');
+    addHeader(doc, 'Attendance Report', subtitle);
 
     const totalCheckins = attendanceData.reduce((s: number, a: any) => s + a.attendance, 0);
     const maxDay = attendanceData.reduce((best: any, a: any) => (!best || a.attendance > best.attendance ? a : best), null);
@@ -348,11 +352,12 @@ export function exportAttendancePDF(attendanceData: any[]) {
 // ═══════════════════════════════════════════════════════════════════════════
 // EXPORT: Products Report
 // ═══════════════════════════════════════════════════════════════════════════
-export function exportProductsPDF(productSalesData: any[]) {
+export function exportProductsPDF(productSalesData: any[], startDate?: string, endDate?: string) {
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const W = doc.internal.pageSize.getWidth();
+    const subtitle = (startDate && endDate) ? `Top selling supplements from ${startDate} to ${endDate}` : 'Top selling supplements this month';
 
-    addHeader(doc, 'Product Sales Report', 'Top selling supplements this month');
+    addHeader(doc, 'Product Sales Report', subtitle);
 
     let y = 46;
     const totalSold = productSalesData.reduce((s: number, p: any) => s + p.sales, 0);

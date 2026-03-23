@@ -87,20 +87,31 @@ const Reports = () => {
   const [membershipData, setMembershipData] = useState<any[]>([]);
   const [attendanceData, setAttendanceData] = useState<any[]>([]);
   const [productSalesData, setProductSalesData] = useState<any[]>([]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
-    fetchReportsData();
+    fetchReportsData('', '');
   }, []);
 
-  const fetchReportsData = async () => {
+  const fetchReportsData = async (start?: string, end?: string) => {
+    const sDate = start !== undefined ? start : startDate;
+    const eDate = end !== undefined ? end : endDate;
     try {
       setIsLoading(true);
+      const params = new URLSearchParams();
+      if (sDate && eDate) {
+        params.append('startDate', sDate);
+        params.append('endDate', eDate);
+      }
+      const qs = params.toString() ? `?${params.toString()}` : '';
+
       const [statsRes, revenueRes, membershipRes, attendanceRes, productsRes] = await Promise.all([
-        api.get('/dashboard/stats'),
-        api.get('/reports/revenue'),
-        api.get('/reports/membership'),
-        api.get('/reports/attendance'),
-        api.get('/reports/products'),
+        api.get(`/dashboard/stats${qs}`),
+        api.get(`/reports/revenue${qs}`),
+        api.get(`/reports/membership${qs}`),
+        api.get(`/reports/attendance${qs}`),
+        api.get(`/reports/products${qs}`),
       ]);
       setStats(statsRes);
       setRevenueData(revenueRes.reverse());
@@ -123,19 +134,19 @@ const Reports = () => {
       await new Promise(r => setTimeout(r, 50)); // let UI update
       switch (reportType) {
         case 'complete':
-          exportCompletePDF({ stats, revenueData, membershipData, attendanceData, productSalesData });
+          exportCompletePDF({ stats, revenueData, membershipData, attendanceData, productSalesData }, startDate, endDate);
           break;
         case 'revenue':
-          exportRevenuePDF(revenueData, stats);
+          exportRevenuePDF(revenueData, stats, startDate, endDate);
           break;
         case 'membership':
-          exportMembershipPDF(membershipData, stats);
+          exportMembershipPDF(membershipData, stats, startDate, endDate);
           break;
         case 'attendance':
-          exportAttendancePDF(attendanceData);
+          exportAttendancePDF(attendanceData, startDate, endDate);
           break;
         case 'products':
-          exportProductsPDF(productSalesData);
+          exportProductsPDF(productSalesData, startDate, endDate);
           break;
       }
       toast({
@@ -167,19 +178,61 @@ const Reports = () => {
               View detailed analytics and download professional PDF reports.
             </p>
           </div>
-          <Button
-            variant="hero"
-            className="gap-2 w-full sm:w-auto"
-            onClick={() => handleExport('complete')}
-            disabled={isLoading || !!exporting}
-          >
-            {exporting === 'complete' ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <FileDown className="h-4 w-4" />
-            )}
-            Export All Reports
-          </Button>
+          
+          <div className="flex flex-col xl:flex-row items-start xl:items-center gap-3 w-full sm:w-auto mt-4 sm:mt-0">
+            <div className="flex flex-wrap items-center gap-2 bg-muted/20 p-1.5 rounded-lg border border-border/50 max-w-full">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              <span className="text-muted-foreground text-sm">to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="flex h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              <Button
+                variant="default"
+                size="sm"
+                onClick={() => fetchReportsData(startDate, endDate)}
+                disabled={isLoading || (!startDate && endDate) || (startDate && !endDate)}
+                className="h-9 px-3"
+              >
+                Apply
+              </Button>
+              {(startDate || endDate) && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setStartDate('');
+                    setEndDate('');
+                    fetchReportsData('', '');
+                  }}
+                  className="h-9 px-3 text-muted-foreground hover:text-foreground"
+                >
+                  Clear
+                </Button>
+              )}
+            </div>
+
+            <Button
+              variant="hero"
+              className="gap-2 w-full xl:w-auto whitespace-nowrap"
+              onClick={() => handleExport('complete')}
+              disabled={isLoading || !!exporting}
+            >
+              {exporting === 'complete' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileDown className="h-4 w-4" />
+              )}
+              Export All
+            </Button>
+          </div>
         </div>
 
         {/* ── Summary Stat Cards ── */}
